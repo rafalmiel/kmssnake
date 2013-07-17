@@ -29,18 +29,105 @@ page_flip_handler(struct app_video * app_video)
 static int
 gldrm_video_init(struct app_video *app_video, const char *node)
 {
+	static const EGLint conf_att[] = {
+		EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+		EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+		EGL_RED_SIZE, 1,
+		EGL_GREEN_SIZE, 1,
+		EGL_BLUE_SIZE, 1,
+		EGL_ALPHA_SIZE, 0,
+		EGL_NONE
+	};
+	static const EGLint ctx_att[] = {
+		EGL_CONTEXT_CLIENT_VERSION, 2,
+		EGL_NONE
+	};
+	const char *ext;
+	int ret;
+	EGLint major, minor, n;
+	EGLenum api;
+	EGLBoolean b;
+	struct app_video_drm *vdrm;
 	struct app_video_gldrm *gldrm;
 
 	gldrm = malloc(sizeof *gldrm);
 	if (!gldrm)
 		return -ENOMEM;
+	memset(gldrm, 0, sizeof *gldrm);
 
-	if (app_video_drm_init(app_video, page_flip_handler, node, gldrm)) {
-		free(gldrm);
-		return -ENOMEM;
+	ret = app_video_drm_init(app_video, page_flip_handler, node, gldrm);
+	if (ret) {
+		goto err_free;
+	}
+
+	vdrm = app_video->data;
+
+	gldrm->gbm_device = gbm_create_device(vdrm->fd);
+	if (!gldrm->gbm_device) {
+		ret = -EFAULT;
+		goto err_video;
+	}
+
+	gldrm->egl_display = eglGetDisplay((EGLNativeDisplayType) gldrm->gbm_device);
+	if (gldrm->egl_display == EGL_NO_DISPLAY) {
+		ret = -EFAULT;
+		goto err_gbm;
+	}
+
+	b = eglInitialize(gldrm->egl_display, &major, &minor);
+	if (!b) {
+		ret = -EFAULT;
+		goto err_gbm;
+	}
+
+	printf("EGL Init %d.%d\n", major, minor);
+	printf("EGL Version %s", eglQueryString(gldrm->egl_display, EGL_VERSION));
+	printf("EGL Vendor %s", eglQueryString(gldrm->egl_display, EGL_VENDOR));
+	ext = eglQueryString(gldrm->egl_display, EGL_EXTENSIONS);
+	printf("EGL Extenstions %s\n", ext);
+
+	if (!ext || !strstr(ext, "EGL_KHR_surfaceless_context")) {
+		ret = -EFAULT;
+		goto err_disp;
+	}
+
+	api = EGL_OPENGL_ES_API;
+	if (!eglBindAPI(api)) {
+		ret = -EFAULT;
+		goto err_disp;
+	}
+
+	b = eglChooseConfig(gldrm->egl_display, conf_att, &gldrm->egl_config, 1, &n);
+	if (!b || n != 1) {
+		ret = -EFAULT;
+		goto err_disp;
+	}
+
+	gldrm->egl_context = eglCreateContext(gldrm->egl_display, gldrm->egl_config, EGL_NO_CONTEXT,
+					      ctx_att);
+	if (gldrm->egl_context == EGL_NO_CONTEXT) {
+		ret = -EFAULT;
+		goto err_disp;
+	}
+
+	if (!eglMakeCurrent(gldrm->egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE,
+			    gldrm->egl_context)) {
+		ret = -EFAULT;
+		goto err_ctx;
 	}
 
 	return 0;
+err_ctx:
+	eglDestroyContext(gldrm->egl_display, gldrm->egl_context);
+err_disp:
+	eglTerminate(gldrm->egl_display);
+err_gbm:
+	gbm_device_destroy(gldrm->gbm_device);
+err_video:
+	app_video_drm_destroy(app_video);
+err_free:
+	free(gldrm);
+	return ret;
 }
 
 static void
@@ -51,8 +138,14 @@ gldrm_video_destroy(struct app_video *app_video)
 
 	vdrm = app_video->data;
 	gldrm = vdrm->data;
-	app_video_drm_destroy(app_video);
+
+	eglMakeCurrent(gldrm->egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE,
+		       EGL_NO_CONTEXT);
+	eglDestroyContext(gldrm->egl_display, gldrm->egl_context);
+	eglTerminate(gldrm->egl_display);
+	gbm_device_destroy(gldrm->gbm_device);
 	free(gldrm);
+	app_video_drm_destroy(app_video);
 }
 
 const static struct app_video_ops gldrm_video_ops = {
