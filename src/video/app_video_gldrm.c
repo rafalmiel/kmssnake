@@ -81,8 +81,8 @@ gldrm_video_init(struct app_video *app_video, const char *node)
 	}
 
 	printf("EGL Init %d.%d\n", major, minor);
-	printf("EGL Version %s", eglQueryString(gldrm->egl_display, EGL_VERSION));
-	printf("EGL Vendor %s", eglQueryString(gldrm->egl_display, EGL_VENDOR));
+	printf("EGL Version %s\n", eglQueryString(gldrm->egl_display, EGL_VERSION));
+	printf("EGL Vendor %s\n", eglQueryString(gldrm->egl_display, EGL_VENDOR));
 	ext = eglQueryString(gldrm->egl_display, EGL_EXTENSIONS);
 	printf("EGL Extenstions %s\n", ext);
 
