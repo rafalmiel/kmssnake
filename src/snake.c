@@ -14,7 +14,7 @@ int main()
 
 	sn_app_run(app);
 
-	printf("Hello world\n");
+	printf("That's all folks!\n");
 
 	sn_app_unref(app);
 	return 0;

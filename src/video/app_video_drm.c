@@ -11,9 +11,120 @@
 #include "app_video_internal.h"
 #include "app_video_drm_internal.h"
 
-static int drm_io_event(int fd, uint32_t mask, void *data)
+int
+app_video_drm_wakeup(struct app_video *video, const struct app_display_ops *ops)
+{
+	struct app_video_drm *drmvideo = video->data;
+	int ret;
+
+	fprintf(stderr, "app video drm wakeup\n");
+
+	ret = drmSetMaster(drmvideo->fd);
+	if (ret) {
+		return -EACCES;
+	}
+
+	fprintf(stderr, "Set Drm Master!\n");
+
+	ret = app_video_drm_hotplug(video, ops);
+
+	if (ret) {
+		drmDropMaster(drmvideo->fd);
+		return ret;
+	}
+
+	return 0;
+}
+
+static void
+app_video_drm_bind_display(struct app_video *video, drmModeResPtr res,
+			   drmModeConnectorPtr conn,
+			   const struct app_display_ops *ops)
+{
+	struct app_video_drm *vdrm;
+	struct app_display *disp;
+	struct app_display_drm *drmdisp;
+	int ret, i;
+
+	disp = app_display_create(ops);
+
+	if (!disp) {
+		return;
+	}
+	drmdisp = disp->data;
+
+	for (i = 0; i < conn->count_modes; ++i) {
+		drmdisp->mode_info = conn->modes[i];
+
+		fprintf(stderr, "MODE %d %d\n",
+			(int)drmdisp->mode_info.vdisplay,
+			(int)drmdisp->mode_info.hdisplay);
+
+		break;
+	}
+
+	/*if (!drmdisp->mode_info) {
+		ret = -EFAULT;
+		app_display_unref(disp);
+		return;
+	}*/
+
+	drmdisp->conn_id = conn->connector_id;
+
+}
+
+int
+app_video_drm_hotplug(struct app_video *video, const struct app_display_ops *ops)
+{
+	struct app_video_drm *vdrm = video->data;
+	drmModeResPtr res;
+	drmModeConnectorPtr conn;
+	int i;
+
+	res = drmModeGetResources(vdrm->fd);
+	if (!res) {
+		return -EACCES;
+	}
+
+	for (i = 0; i < res->count_connectors; ++i) {
+		conn = drmModeGetConnector(vdrm->fd, res->connectors[i]);
+		if (!conn) continue;
+		if (conn->connection != DRM_MODE_CONNECTED) {
+			drmModeFreeConnector(conn);
+			continue;
+		}
+
+		app_video_drm_bind_display(video, res, conn, ops);
+
+		drmModeFreeConnector(conn);
+	}
+
+	drmModeFreeResources(res);
+	return 0;
+}
+
+static int
+drm_io_event(int fd, uint32_t mask, void *data)
 {
 	fprintf(stderr, "drm event\n");
+}
+
+int
+app_display_drm_init(struct app_display *disp, void *data)
+{
+	struct app_display_drm *drmdisp;
+
+	drmdisp = malloc(sizeof *drmdisp);
+	if (!drmdisp) {
+		return -EFAULT;
+	}
+
+	disp->data = drmdisp;
+	drmdisp->data = data;
+	memset(&drmdisp->mode_info, 0, sizeof drmdisp->mode_info);
+	drmdisp->saved_crtc = NULL;
+
+	return 0;
 }
 
 int

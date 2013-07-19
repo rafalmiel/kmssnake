@@ -58,13 +58,12 @@ sn_app_create(void)
 
 	app->ref = 1;
 	app->event_loop = ev_event_loop_create();
+
 	app->video = app_video_create(app->event_loop, "/dev/dri/card0");
 
 	if (!app->video) {
 		fprintf(stderr, "app: failed to init video\n");
-		ev_event_loop_unref(app->event_loop);
-		free(app);
-		return NULL;
+		goto err_video;
 	}
 
 	struct ev_event_source *sigsrc =
@@ -74,14 +73,19 @@ sn_app_create(void)
 						 app);
 	if (!sigsrc) {
 		fprintf(stderr, "app: failed to add signal src\n");
-		app_video_unref(app->video);
-		ev_event_loop_unref(app->event_loop);
-		return NULL;
+		goto err_evloop;
 	}
 
 	app->signal_source = sigsrc;
 
 	return app;
+
+err_evloop:
+	app_video_unref(app->video);
+err_video:
+	ev_event_loop_unref(app->event_loop);
+	free(app);
+	return NULL;
 }
 
 

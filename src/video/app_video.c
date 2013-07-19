@@ -4,6 +4,50 @@
 #include "app_video_internal.h"
 #include "app_video_gldrm.h"
 
+struct app_display *
+app_display_create(const struct app_display_ops *ops)
+{
+	struct app_display *display;
+	int ret;
+
+	display = malloc(sizeof *display);
+	if (!display) {
+		return NULL;
+	}
+
+	display->ref = 1;
+	display->data = NULL;
+	display->ops = ops;
+
+	ret = display->ops->init(display);
+
+	if (ret) {
+		free(display);
+		return NULL;
+	}
+
+	return display;
+}
+
+CM_EXPORT void
+app_display_ref(struct app_display *app_display)
+{
+	if (!app_display || !app_display->ref)
+		return;
+
+	++app_display->ref;
+}
+
+CM_EXPORT void
+app_display_unref(struct app_display *app_display)
+{
+	if (!app_display || !app_display->ref || --app_display->ref)
+		return;
+
+	app_display->ops->deactivate(app_display);
+	free(app_display);
+}
+
 CM_EXPORT struct app_video *
 app_video_create(struct ev_event_loop *evloop, const char *node)
 {
@@ -18,7 +62,7 @@ app_video_create(struct ev_event_loop *evloop, const char *node)
 
 	app_video->ref = 1;
 	app_video->evloop = evloop;
-	cm_list_init(&app_video->displays);
+	app_video->display = NULL;
 
 	ev_event_loop_ref(evloop);
 
@@ -32,7 +76,14 @@ app_video_create(struct ev_event_loop *evloop, const char *node)
 		return NULL;
 	}
 
-	app_video->ops->init(app_video, node);
+	ret = app_video->ops->init(app_video, node);
+
+	if (ret) {
+		free(app_video);
+		return NULL;
+	}
+
+	app_video->ops->wake_up(app_video);
 
 	return app_video;
 }
@@ -52,7 +103,10 @@ app_video_unref(struct app_video* app)
 	if (!app || !app->ref || --app->ref)
 		return;
 
+	if (app->display)
+		app_display_unref(app->display);
 	app->ops->destroy(app);
 	ev_event_loop_unref(app->evloop);
 	free(app);
 }
+

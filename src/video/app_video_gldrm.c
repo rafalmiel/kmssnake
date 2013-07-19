@@ -17,11 +17,52 @@
 #include <unistd.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
+#include "app_video.h"
 #include "app_video_drm_internal.h"
 #include "app_video_internal.h"
 
+static int
+gldrm_display_init(struct app_display *display)
+{
+	struct app_display_gldrm *disp;
+	int ret;
+
+	disp = malloc(sizeof *disp);
+	if (!disp) {
+		return -EFAULT;
+	}
+
+	ret = app_display_drm_init(display, disp);
+
+	if (ret) {
+		goto err_init;
+	}
+
+err_init:
+	free(disp);
+	return ret;
+}
+
 static void
-page_flip_handler(struct app_video * app_video)
+gldrm_display_activate(struct app_display *display)
+{
+
+}
+
+static void
+gldrm_display_swap(struct app_display *display)
+{
+
+}
+
+static void
+gldrm_display_destroy(struct app_display *display)
+{
+
+}
+
+static void
+page_flip_handler(struct app_display * app_video)
 {
 
 }
@@ -148,9 +189,27 @@ gldrm_video_destroy(struct app_video *app_video)
 	app_video_drm_destroy(app_video);
 }
 
+const static struct app_display_ops gldrm_display_ops = {
+	gldrm_display_init,
+	gldrm_display_activate,
+	gldrm_display_swap,
+	gldrm_display_destroy
+};
+
+static void
+gldrm_video_wakeup(struct app_video *app_video)
+{
+	fprintf(stderr, "gldrm wakeup\n");
+	if (!app_video->display) {
+		fprintf(stderr, "gldrm wakeup\n");
+		app_video_drm_wakeup(app_video, &gldrm_display_ops);
+	}
+}
+
 const static struct app_video_ops gldrm_video_ops = {
 	gldrm_video_init,
-	gldrm_video_destroy
+	gldrm_video_destroy,
+	gldrm_video_wakeup
 };
 
 CM_EXPORT int

@@ -14,6 +14,19 @@
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 
+struct app_display_gldrm_rb {
+	struct app_display *disp;
+	struct gbm_bo *bo;
+	uint32_t fb;
+};
+
+struct app_display_gldrm {
+	struct gbm_surface *gbm;
+	EGLSurface surface;
+	struct app_display_gldrm_rb *current;
+	struct app_display_gldrm_rb *next;
+};
+
 struct app_video_gldrm {
 	struct gbm_device *gbm_device;
 	EGLContext egl_context;

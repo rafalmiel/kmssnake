@@ -5,33 +5,37 @@
 #include <utils/cm_utils.h>
 
 struct ev_event_loop;
+struct app_video;
 
 struct app_display {
-	struct cm_list link;
+	unsigned int ref;
+	struct app_video *video;
+	const struct app_display_ops *ops;
 
 	void *data;
 };
 
 struct app_video {
-	int ref;
+	unsigned int ref;
 	struct ev_event_loop *evloop;
 	const struct app_video_ops *ops;
-	struct cm_list displays;
+	//lets just support one display for now
+	struct app_display *display;
 
 	void *data;
 };
 
-typedef void (*app_drm_page_flip_t) (struct app_video *);
-
 struct app_video_ops {
 	int (*init)(struct app_video *, const char *node);
 	void (*destroy)(struct app_video *);
+	void (*wake_up)(struct app_video *);
 };
 
 struct app_display_ops {
 	int (*init)(struct app_display *);
 	void (*activate)(struct app_display *);
 	void (*swap)(struct app_display *);
+	void (*deactivate)(struct app_display *);
 };
 
 #endif // APP_VIDEO_INTERNAL_H
