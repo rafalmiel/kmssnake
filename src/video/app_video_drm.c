@@ -12,17 +12,17 @@
 #include "app_video_drm_internal.h"
 
 int
-app_video_drm_wakeup(struct app_video *video, const struct app_display_ops *ops)
+app_video_drm_wake_up(struct app_video *video, const struct app_display_ops *ops)
 {
 	struct app_video_drm *drmvideo = video->data;
 	int ret;
 
 	fprintf(stderr, "app video drm wakeup\n");
 
-	ret = drmSetMaster(drmvideo->fd);
-	if (ret) {
-		return -EACCES;
-	}
+//	ret = drmSetMaster(drmvideo->fd);
+//	if (ret) {
+//		return -EACCES;
+//	}
 
 	fprintf(stderr, "Set Drm Master!\n");
 
@@ -47,18 +47,22 @@ app_video_drm_bind_display(struct app_video *video, drmModeResPtr res,
 	int ret, i;
 
 	disp = app_display_create(ops);
+	disp->video = video;
 
 	if (!disp) {
 		return;
 	}
 	drmdisp = disp->data;
+	video->display = disp;
+
+	fprintf(stderr, "Display ptr %p", video->display);
 
 	for (i = 0; i < conn->count_modes; ++i) {
 		drmdisp->mode_info = conn->modes[i];
 
-		fprintf(stderr, "MODE %d %d\n",
-			(int)drmdisp->mode_info.vdisplay,
-			(int)drmdisp->mode_info.hdisplay);
+		fprintf(stderr, "MODE %d x %d\n",
+			(int)drmdisp->mode_info.hdisplay,
+			(int)drmdisp->mode_info.vdisplay);
 
 		break;
 	}
@@ -90,13 +94,17 @@ app_video_drm_hotplug(struct app_video *video, const struct app_display_ops *ops
 		conn = drmModeGetConnector(vdrm->fd, res->connectors[i]);
 		if (!conn) continue;
 		if (conn->connection != DRM_MODE_CONNECTED) {
+			fprintf(stderr, "Connection %d not connected %d\n", i, conn->connection);
 			drmModeFreeConnector(conn);
 			continue;
 		}
 
+		fprintf(stderr, "Binding display to connection %d\n", i);
 		app_video_drm_bind_display(video, res, conn, ops);
 
 		drmModeFreeConnector(conn);
+
+		break;
 	}
 
 	drmModeFreeResources(res);
@@ -128,6 +136,87 @@ app_display_drm_init(struct app_display *disp, void *data)
 }
 
 int
+app_display_drm_activate(struct app_display *disp)
+{
+	struct app_video *video = disp->video;
+	struct app_video_drm *vdrm = video->data;
+	struct app_display_drm *ddrm = disp->data;
+	drmModeResPtr res;
+	drmModeConnectorPtr conn;
+	drmModeEncoderPtr enc;
+	int i, j, crtc;
+
+	res = drmModeGetResources(vdrm->fd);
+	if (!res) {
+		fprintf(stderr, "drm: failed to get resources\n");
+		return -EFAULT;
+	}
+
+	conn = drmModeGetConnector(vdrm->fd, ddrm->conn_id);
+	if (!conn) {
+		fprintf(stderr, "drm: failed to get connector\n");
+		drmModeFreeResources(res);
+		return -EFAULT;
+	}
+
+	crtc = -1;
+	for (i = 0; i < conn->count_encoders; ++i) {
+		enc = drmModeGetEncoder(vdrm->fd, conn->encoders[i]);
+		if (!enc) {
+			continue;
+		}
+
+		if (enc->encoder_id == conn->encoder_id) {
+			crtc = enc->crtc_id;
+		} else {
+			fprintf(stderr, "omit %d encoder\n", i);
+		}
+
+		drmModeFreeEncoder(enc);
+		if (crtc >= 0)
+			break;
+	}
+
+	drmModeFreeConnector(conn);
+	drmModeFreeResources(res);
+
+	if (crtc < 0) {
+		fprintf(stderr, "drm: crtc not found\n");
+		return -ENODEV;
+	}
+
+	ddrm->crtc_id = crtc;
+	if (ddrm->saved_crtc) {
+		drmModeFreeCrtc(ddrm->saved_crtc);
+	}
+	ddrm->saved_crtc = drmModeGetCrtc(vdrm->fd, ddrm->crtc_id);
+
+	return 0;
+}
+
+void
+app_display_drm_deactivate(struct app_display *disp)
+{
+	struct app_video *video = disp->video;
+	struct app_video_drm *vdrm = video->data;
+	struct app_display_drm *ddrm = disp->data;
+
+	if (ddrm->saved_crtc) {
+		drmModeSetCrtc(vdrm->fd, ddrm->saved_crtc->crtc_id,
+			       ddrm->saved_crtc->buffer_id,
+			       ddrm->saved_crtc->x,
+			       ddrm->saved_crtc->y,
+			       &ddrm->conn_id, 1,
+			       &ddrm->saved_crtc->mode);
+
+		drmModeFreeCrtc(ddrm->saved_crtc);
+		ddrm->saved_crtc = NULL;
+	}
+
+	ddrm->crtc_id = 0;
+}
+
+int
 app_video_drm_init(struct app_video *app, app_drm_page_flip_t pageflip_func,
 		   const char *node, void *data)
 {
@@ -145,13 +234,14 @@ app_video_drm_init(struct app_video *app, app_drm_page_flip_t pageflip_func,
 	app->data = vdrm;
 
 	vdrm->fd = open(node, O_RDWR | O_CLOEXEC | O_NONBLOCK);
+	//vdrm->fd = drmOpen("i915", NULL/*O_RDWR | O_CLOEXEC | O_NONBLOCK*/);
 	if (vdrm->fd < 0) {
 		fprintf(stderr, "Cannot open drm device %s : %m", node);
 		ret = -EFAULT;
 		goto err_drm_open;
 	}
 
-	drmDropMaster(vdrm->fd);
+	//drmDropMaster(vdrm->fd);
 
 	struct ev_event_source *source= ev_event_loop_add_fd(
 				app->evloop, EV_EVENT_READABLE,

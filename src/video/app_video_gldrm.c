@@ -38,14 +38,172 @@ gldrm_display_init(struct app_display *display)
 		goto err_init;
 	}
 
+	return 0;
+
 err_init:
 	free(disp);
 	return ret;
 }
 
 static void
+bo_destroy_event(struct gbm_bo *bo, void *data)
+{
+	struct app_display_gldrm_rb *rb = data;
+	struct app_video_drm *vdrm;
+
+	if (!rb)
+		return;
+
+	vdrm = rb->disp->video->data;
+	drmModeRmFB(vdrm->fd, rb->fb);
+	free(rb);
+}
+
+static struct app_display_gldrm_rb *
+bo_to_rb(struct app_display *display, struct gbm_bo *bo)
+{
+	struct app_display_gldrm_rb *rb = gbm_bo_get_user_data(bo);
+	struct app_video *video = display->video;
+	struct app_video_drm *vdrm = video->data;
+	int ret;
+	unsigned int stride, handle, width, height;
+
+	if (rb)
+		return rb;
+
+	rb = malloc(sizeof *rb);
+	if (!rb) {
+		return NULL;
+	}
+
+	rb->disp = display;
+	rb->bo = bo;
+
+	stride = gbm_bo_get_stride(rb->bo);
+	handle = gbm_bo_get_handle(rb->bo).u32;
+	width = gbm_bo_get_width(rb->bo);
+	height = gbm_bo_get_height(rb->bo);
+
+	ret = drmModeAddFB(vdrm->fd, width, height, 24, 32,
+			   stride, handle, &rb->fb);
+
+	if (ret) {
+		free(rb);
+		return NULL;
+	}
+
+	gbm_bo_set_user_data(bo, rb, NULL);
+	return rb;
+}
+
+static EGLSurface eglSurf;
+
+static int
 gldrm_display_activate(struct app_display *display)
 {
+	struct app_video *video = display->video;
+	struct app_video_drm *vdrm = video->data;
+	struct app_video_gldrm *vgldrm = vdrm->data;
+	struct app_display_drm *ddrm = display->data;
+	struct app_display_gldrm *dgldrm = ddrm->data;
+	struct gbm_bo *bo;
+	drmModeModeInfoPtr minfo;
+	int ret;
+
+	minfo = &ddrm->mode_info;
+
+	dgldrm->current = NULL;
+	dgldrm->next = NULL;
+
+	ret = app_display_drm_activate(display);
+	if (ret)
+		return ret;
+
+	dgldrm->gbm = gbm_surface_create(vgldrm->gbm_device,
+					 minfo->hdisplay, minfo->vdisplay,
+					 GBM_FORMAT_XRGB8888,
+					 GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING);
+
+	if (!dgldrm->gbm) {
+		fprintf(stderr, "gldrm: gbm_surface_create failed\n");
+		goto err_gbm_create;
+	}
+
+	fprintf(stderr, "%d %d d %p c %p gbm %p\n",
+		minfo->hdisplay, minfo->vdisplay,
+		vgldrm->egl_display,
+		vgldrm->egl_config, dgldrm->gbm);
+
+#if defined(__GBM__)
+	fprintf(stderr, "PLATFORM GBM\n");
+#endif
+	fprintf(stderr, "EGL POINTERS %p %p\n", vgldrm->egl_display,
+		vgldrm->egl_config);
+	dgldrm->surface = eglCreateWindowSurface(vgldrm->egl_display,
+						 vgldrm->egl_config,
+						 (EGLNativeWindowType)dgldrm->gbm,
+						 NULL);
+
+	//dgldrm->surface = eglSurf;
+
+	if (dgldrm->surface == EGL_NO_SURFACE) {
+		fprintf(stderr, "gldrm: eglCreateWindowSurface failed\n");
+		ret = -EFAULT;
+		goto err_egl_create_surface;
+	}
+
+	if (!eglMakeCurrent(vgldrm->egl_display, dgldrm->surface,
+			    dgldrm->surface, vgldrm->egl_context)) {
+		fprintf(stderr, "gldrm: eglMakeCurrent failed\n");
+		ret = -EFAULT;
+		goto err_egl_make_current;
+	}
+
+	glClearColor(0.8, 0.8, 0.8, 0);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	if (!eglSwapBuffers(vgldrm->egl_display, dgldrm->surface)) {
+		fprintf(stderr, "gldrm: eglSwapBuffers failed\n");
+		ret = -EFAULT;
+		goto err_egl_swap_buffers;
+	}
+
+	bo = gbm_surface_lock_front_buffer(dgldrm->gbm);
+	if (!bo) {
+		fprintf(stderr, "gldrm: gbm_surface_lock_front_buffer failed\n");
+		ret = -EFAULT;
+		goto err_egl_swap_buffers;
+	}
+
+	dgldrm->current = bo_to_rb(display, bo);
+
+	if (!dgldrm->current) {
+		fprintf(stderr, "gldrm: bo_to_rb failed\n");
+		ret = -EFAULT;
+		goto err_bo;
+	}
+
+	ret = drmModeSetCrtc(vdrm->fd, ddrm->crtc_id, dgldrm->current->fb,
+			     0, 0, &ddrm->conn_id, 1, minfo);
+
+	if (ret) {
+		fprintf(stderr, "gldrm: drmModeSetCrtc failed\n");
+		ret = -EFAULT;
+		goto err_bo;
+	}
+
+	return 0;
+err_bo:
+	gbm_surface_release_buffer(dgldrm->gbm, bo);
+err_egl_swap_buffers:
+	eglMakeCurrent(vgldrm->egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE,
+		       vgldrm->egl_context);
+err_egl_make_current:
+	eglDestroySurface(vgldrm->egl_display, dgldrm->surface);
+err_egl_create_surface:
+	gbm_surface_destroy(dgldrm->surface);
+err_gbm_create:
+	app_display_drm_deactivate(display);
 
 }
 
@@ -157,6 +315,18 @@ gldrm_video_init(struct app_video *app_video, const char *node)
 		goto err_ctx;
 	}
 
+	struct gbm_surface *surface = gbm_surface_create(gldrm->gbm_device,
+					 1920, 1080,
+					 GBM_FORMAT_XRGB8888,
+					 GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING);
+	eglSurf = eglCreateWindowSurface(gldrm->egl_display,
+						 gldrm->egl_config,
+						 (EGLNativeWindowType)surface,
+						 NULL);
+
+	fprintf(stderr, "EGL POINTERS %p %p\n", gldrm->egl_display,
+		gldrm->egl_config);
+
 	return 0;
 err_ctx:
 	eglDestroyContext(gldrm->egl_display, gldrm->egl_context);
@@ -197,19 +367,19 @@ const static struct app_display_ops gldrm_display_ops = {
 };
 
 static void
-gldrm_video_wakeup(struct app_video *app_video)
+gldrm_video_wake_up(struct app_video *app_video)
 {
 	fprintf(stderr, "gldrm wakeup\n");
 	if (!app_video->display) {
 		fprintf(stderr, "gldrm wakeup\n");
-		app_video_drm_wakeup(app_video, &gldrm_display_ops);
+		app_video_drm_wake_up(app_video, &gldrm_display_ops);
 	}
 }
 
 const static struct app_video_ops gldrm_video_ops = {
 	gldrm_video_init,
 	gldrm_video_destroy,
-	gldrm_video_wakeup
+	gldrm_video_wake_up
 };
 
 CM_EXPORT int

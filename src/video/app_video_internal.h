@@ -33,7 +33,7 @@ struct app_video_ops {
 
 struct app_display_ops {
 	int (*init)(struct app_display *);
-	void (*activate)(struct app_display *);
+	int (*activate)(struct app_display *);
 	void (*swap)(struct app_display *);
 	void (*deactivate)(struct app_display *);
 };

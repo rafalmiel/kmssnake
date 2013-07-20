@@ -22,6 +22,7 @@ app_display_create(const struct app_display_ops *ops)
 	ret = display->ops->init(display);
 
 	if (ret) {
+		fprintf(stderr, "Display init failed\n");
 		free(display);
 		return NULL;
 	}
@@ -83,7 +84,16 @@ app_video_create(struct ev_event_loop *evloop, const char *node)
 		return NULL;
 	}
 
+	fprintf(stderr, "waking up wideo\n");
 	app_video->ops->wake_up(app_video);
+	fprintf(stderr, "activating display\n");
+	fprintf(stderr, "Display ptr %p\n", app_video->display);
+	ret = app_video->display->ops->activate(app_video->display);
+
+	if (ret) {
+		fprintf(stderr, "app: display activate failed\n");
+		return NULL;
+	}
 
 	return app_video;
 }
