@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <utils/cm_utils.h>
+#include "string.h"
 #include "app_video.h"
 #include "app_video_internal.h"
 #include "app_video_gldrm.h"
@@ -14,6 +15,8 @@ app_display_create(const struct app_display_ops *ops)
 	if (!display) {
 		return NULL;
 	}
+
+	memset(display, 0, sizeof *display);
 
 	display->ref = 1;
 	display->data = NULL;
@@ -84,10 +87,13 @@ app_video_create(struct ev_event_loop *evloop, const char *node)
 		return NULL;
 	}
 
-	fprintf(stderr, "waking up wideo\n");
-	app_video->ops->wake_up(app_video);
-	fprintf(stderr, "activating display\n");
-	fprintf(stderr, "Display ptr %p\n", app_video->display);
+	ret = app_video->ops->wake_up(app_video);
+
+	if (ret) {
+		app_video->ops->destroy(app_video);
+		return NULL;
+	}
+
 	ret = app_video->display->ops->activate(app_video->display);
 
 	if (ret) {

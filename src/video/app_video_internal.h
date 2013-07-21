@@ -28,7 +28,7 @@ struct app_video {
 struct app_video_ops {
 	int (*init)(struct app_video *, const char *node);
 	void (*destroy)(struct app_video *);
-	void (*wake_up)(struct app_video *);
+	int (*wake_up)(struct app_video *);
 };
 
 struct app_display_ops {
