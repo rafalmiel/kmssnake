@@ -58,7 +58,6 @@ app_video_drm_bind_display(struct app_video *video, drmModeResPtr res,
 	}
 
 	drmdisp->conn_id = conn->connector_id;
-
 }
 
 int
@@ -95,10 +94,50 @@ app_video_drm_hotplug(struct app_video *video, const struct app_display_ops *ops
 	return ret;
 }
 
+static void
+display_event(int fd, unsigned int frame, unsigned int sec,
+	      unsigned int usec, void *data)
+{
+	struct app_display *disp = data;
+
+	app_display_unref(disp);
+}
+
+static int
+app_video_drm_read_events(struct app_video *video)
+{
+	struct app_video_drm *vdrm = video->data;
+	drmEventContext ev;
+	int ret;
+
+	memset(&ev, 0, sizeof ev);
+	ev.version = DRM_EVENT_CONTEXT_VERSION;
+	ev.page_flip_handler;
+	errno = 0;
+	ret = drmHandleEvent(vdrm->fd, &ev);
+
+	if (ret < 0 && errno != EAGAIN)
+		return -EFAULT;
+
+	return 0;
+}
+
 static int
 drm_io_event(int fd, uint32_t mask, void *data)
 {
-	fprintf(stderr, "drm event\n");
+	int ret;
+	struct app_video *video = data;
+	struct app_video_drm *vdrm = video->data;
+
+	ret = app_video_drm_read_events(video);
+
+	if (ret) {
+		return ret;
+	}
+
+	vdrm->page_flip_fun(video->display);
+
+	video->display->frame_func(video->display);
 }
 
 int
@@ -177,6 +216,28 @@ app_display_drm_activate(struct app_display *disp)
 	return 0;
 }
 
+int
+app_display_drm_swap(struct app_display *disp, uint32_t fb)
+{
+	struct app_display_drm *ddrm = disp->data;
+	struct app_video *video = disp->video;
+	struct app_video_drm *vdrm = video->data;
+	int ret;
+	drmModeModeInfoPtr mode;
+
+	ret = drmModePageFlip(vdrm->fd, ddrm->crtc_id, fb,
+			      DRM_MODE_PAGE_FLIP_EVENT, disp);
+
+	if (ret) {
+		fprintf(stderr, "Cannot page flip on DRM CRTC %m\n");
+		return -EFAULT;
+	}
+
+	app_display_ref(disp);
+
+	return 0;
+}
+
 void
 app_display_drm_deactivate(struct app_display *disp)
 {
@@ -226,7 +287,8 @@ app_video_drm_init(struct app_video *app, app_drm_page_flip_t pageflip_func,
 
 	drmDropMaster(vdrm->fd);
 
-	struct ev_event_source *source= ev_event_loop_add_fd(
+	struct ev_event_source *source =
+			ev_event_loop_add_fd(
 				app->evloop, EV_EVENT_READABLE,
 				vdrm->fd,
 				drm_io_event,

@@ -10,8 +10,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <gbm.h>
-#include <GLES2/gl2.h>
-#include <GLES2/gl2ext.h>
+#include <GL/gl.h>
+#include <GL/glext.h>
 #include <inttypes.h>
 #include <string.h>
 #include <unistd.h>
@@ -149,7 +149,16 @@ gldrm_display_activate(struct app_display *display)
 		goto err_egl_make_current;
 	}
 
-	glClearColor(0.8, 0.8, 0.8, 0);
+	glViewport(0, 0, ddrm->mode_info.hdisplay, ddrm->mode_info.vdisplay);
+
+	glMatrixMode (GL_PROJECTION);
+	glLoadIdentity ();
+	glOrtho (0, ddrm->mode_info.hdisplay, ddrm->mode_info.vdisplay, 0, 0, 1);
+	glMatrixMode (GL_MODELVIEW);
+
+	glDisable(GL_DEPTH_TEST);
+
+	glClearColor(0.8, 0.8, 0.8, 1);
 	glClear(GL_COLOR_BUFFER_BIT);
 
 	if (!eglSwapBuffers(vgldrm->egl_display, dgldrm->surface)) {
@@ -197,10 +206,50 @@ err_gbm_create:
 
 }
 
-static void
+static int
 gldrm_display_swap(struct app_display *display)
 {
+	struct app_display_gldrm *dgldrm = app_display_drm_get_data(display);
+	struct app_video *video = display->video;
+	struct app_video_gldrm *vgldrm = app_video_drm_get_data(video);
+	struct app_display_gldrm_rb *rb;
+	struct gbm_bo *bo;
+	int ret;
+	int i = 0;
 
+	if (!gbm_surface_has_free_buffers(dgldrm->gbm)) {
+		fprintf(stderr, "Cannot swap EGL buffers BUSY %m\n");
+		return -EBUSY;
+	}
+
+	if (!eglSwapBuffers(vgldrm->egl_display, dgldrm->surface)) {
+		fprintf(stderr, "Cannot swap EGL buffers %m\n");
+		return -EFAULT;
+	}
+
+	bo = gbm_surface_lock_front_buffer(dgldrm->gbm);
+	if (!bo) {
+		fprintf(stderr, "Cannot lock front buffer\n");
+		return -EFAULT;
+	}
+
+	rb = bo_to_rb(display, bo);
+
+	if (!rb) {
+		fprintf(stderr, "cannot lock front gbm buffer\n");
+		return -EFAULT;
+	}
+
+	ret = app_display_drm_swap(display, rb->fb);
+
+	if (ret) {
+		gbm_surface_release_buffer(dgldrm->gbm, bo);
+		return ret;
+	}
+
+	dgldrm->next = rb;
+
+	return 0;
 }
 
 static void
@@ -229,9 +278,17 @@ gldrm_display_deactivate(struct app_display *display)
 }
 
 static void
-page_flip_handler(struct app_display * app_video)
+page_flip_handler(struct app_display * app_display)
 {
+	struct app_display_gldrm *dgldrm = app_display_drm_get_data(app_display);
 
+	if (dgldrm->next) {
+		if (dgldrm->current)
+			gbm_surface_release_buffer(dgldrm->gbm,
+						   dgldrm->current->bo);
+		dgldrm->current = dgldrm->next;
+		dgldrm->next = NULL;
+	}
 }
 
 static int
@@ -239,7 +296,7 @@ gldrm_video_init(struct app_video *app_video, const char *node)
 {
 	static const EGLint conf_att[] = {
 		EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
-		EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+		EGL_RENDERABLE_TYPE, EGL_OPENGL_BIT,
 		EGL_RED_SIZE, 1,
 		EGL_GREEN_SIZE, 1,
 		EGL_BLUE_SIZE, 1,
@@ -299,7 +356,7 @@ gldrm_video_init(struct app_video *app_video, const char *node)
 		goto err_disp;
 	}
 
-	api = EGL_OPENGL_ES_API;
+	api = EGL_OPENGL_API;
 	if (!eglBindAPI(api)) {
 		ret = -EFAULT;
 		goto err_disp;

@@ -7,10 +7,13 @@
 struct ev_event_loop;
 struct app_video;
 
+typedef void (*frame_func)(struct app_display *);
+
 struct app_display {
 	unsigned int ref;
 	struct app_video *video;
 	const struct app_display_ops *ops;
+	frame_func frame_func;
 
 	void *data;
 };
@@ -34,7 +37,7 @@ struct app_video_ops {
 struct app_display_ops {
 	int (*init)(struct app_display *);
 	int (*activate)(struct app_display *);
-	void (*swap)(struct app_display *);
+	int (*swap)(struct app_display *);
 	void (*deactivate)(struct app_display *);
 };
 

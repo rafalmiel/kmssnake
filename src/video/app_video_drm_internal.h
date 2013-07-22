@@ -33,6 +33,8 @@ int app_display_drm_activate(struct app_display *disp);
 
 void app_display_drm_deactivate(struct app_display *disp);
 
+int app_display_drm_swap(struct app_display *disp, uint32_t fb);
+
 static inline void *app_display_drm_get_data(struct app_display *disp)
 {
 	struct app_display_drm *d = disp->data;

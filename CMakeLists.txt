@@ -6,4 +6,4 @@ file(GLOB_RECURSE SRC_LIST ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c)
 add_executable(${PROJECT_NAME} ${SRC_LIST})
 
 
-target_link_libraries(${PROJECT_NAME} drm EGL gbm GL)
+target_link_libraries(${PROJECT_NAME} drm EGL gbm GL m)
