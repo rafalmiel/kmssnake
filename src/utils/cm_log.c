@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <getopt.h>
@@ -31,6 +32,7 @@ static struct option long_options[] =
 	{
 		{"log-level",	required_argument,	0, 0},
 		{"log-backend",	required_argument,	0, 0},
+		{"help",	no_argument,		0, 0},
 		{0, 0, 0, 0}
 	};
 
@@ -61,6 +63,19 @@ parse_subsystem_levels(struct log_config *log_conf, char *subsystem_conf)
 	log_conf->has_subsystem_conf = (cm_hashtable_size(log_conf->subsystem_level) > 0);
 }
 
+static void
+print_help_and_exit(void)
+{
+	printf("Allowed options: %s [options]\n", "kmssnake");
+	printf("	-l --log-level <level>: log level (1-6)\n");
+	printf("	-b --log-backend <confstring>: backend log level.\n");
+	printf("		Override log-level setting for the particular backend.\n");
+	printf("		confstring is in the form backend=level,backend2=level\n");
+	printf("		eg. --log-backend=main=3,drm=6\n");
+	printf("	-h --help: this message\n");
+	exit(0);
+}
+
 CM_EXPORT int
 log_configure(int argc, char *argv[])
 {
@@ -78,13 +93,31 @@ log_configure(int argc, char *argv[])
 	conf->subsystem_level = cm_hashtable_create(cm_str_hash, cm_str_equal);
 
 	while (1) {
-		optret = getopt_long(argc, argv, "", long_options, &option_index);
+		optret = getopt_long(argc, argv, "l:b:h", long_options, &option_index);
 
 		if (optret == 0) {
-			if (option_index == 0) {
+			switch (option_index) {
+			case 0:
 				conf->level = atoi(optarg);
-			} else if (option_index == 1) {
+				break;
+			case 1:
 				parse_subsystem_levels(conf, optarg);
+				break;
+			case 2:
+				print_help_and_exit();
+				break;
+			}
+		} else if (optret > 0){
+			switch (optret) {
+			case 'l':
+				conf->level = atoi(optarg);
+				break;
+			case 'b':
+				parse_subsystem_levels(conf, optarg);
+				break;
+			case 'h':
+				print_help_and_exit();
+				break;
 			}
 		} else {
 			break;
@@ -100,7 +133,7 @@ log_write(int level, const char *subsystem,
 {
 	int *lvl;
 	va_list list;
-	int lev = 5;
+	int lev = LOG_TRACE;
 
 	if (!log_gconf) return;
 
