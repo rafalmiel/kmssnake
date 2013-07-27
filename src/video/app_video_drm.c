@@ -45,7 +45,7 @@ app_video_drm_bind_display(struct app_video *video, drmModeResPtr res,
 	struct app_video_drm *vdrm;
 	struct app_display *disp;
 	struct app_display_drm *drmdisp;
-	int ret, i;
+	int i;
 
 	disp = app_display_create(ops);
 	disp->video = video;
@@ -63,6 +63,8 @@ app_video_drm_bind_display(struct app_video *video, drmModeResPtr res,
 	}
 
 	drmdisp->conn_id = conn->connector_id;
+
+	return 0;
 }
 
 int
