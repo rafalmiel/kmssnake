@@ -8,8 +8,11 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <utils/cm_log.h>
 #include "app_video_internal.h"
 #include "app_video_drm_internal.h"
+
+#define LOG_SUBSYSTEM "drm"
 
 int
 app_video_drm_wake_up(struct app_video *video, const struct app_display_ops *ops)
@@ -19,12 +22,14 @@ app_video_drm_wake_up(struct app_video *video, const struct app_display_ops *ops
 
 	ret = drmSetMaster(drmvideo->fd);
 	if (ret) {
+		log_fatal("failed to set drm master");
 		return -EACCES;
 	}
 
 	ret = app_video_drm_hotplug(video, ops);
 
 	if (ret) {
+		log_fatal("failed to hotplug drm video");
 		drmDropMaster(drmvideo->fd);
 		return ret;
 	}
@@ -32,7 +37,7 @@ app_video_drm_wake_up(struct app_video *video, const struct app_display_ops *ops
 	return 0;
 }
 
-static void
+static int
 app_video_drm_bind_display(struct app_video *video, drmModeResPtr res,
 			   drmModeConnectorPtr conn,
 			   const struct app_display_ops *ops)
@@ -46,7 +51,7 @@ app_video_drm_bind_display(struct app_video *video, drmModeResPtr res,
 	disp->video = video;
 
 	if (!disp) {
-		return;
+		return -EFAULT;
 	}
 	drmdisp = disp->data;
 	video->display = disp;
@@ -82,9 +87,14 @@ app_video_drm_hotplug(struct app_video *video, const struct app_display_ops *ops
 			continue;
 		}
 
-		app_video_drm_bind_display(video, res, conn, ops);
+		ret = app_video_drm_bind_display(video, res, conn, ops);
 
 		drmModeFreeConnector(conn);
+
+		if (ret) {
+			log_fatal("failed to bind drm display");
+			return ret;
+		}
 
 		ret = 0;
 		break;
@@ -173,13 +183,13 @@ app_display_drm_activate(struct app_display *disp)
 
 	res = drmModeGetResources(vdrm->fd);
 	if (!res) {
-		fprintf(stderr, "drm: failed to get resources\n");
+		log_fatal("drm: failed to get resources");
 		return -EFAULT;
 	}
 
 	conn = drmModeGetConnector(vdrm->fd, ddrm->conn_id);
 	if (!conn) {
-		fprintf(stderr, "drm: failed to get connector\n");
+		log_fatal("drm: failed to get connector");
 		drmModeFreeResources(res);
 		return -EFAULT;
 	}
@@ -202,7 +212,7 @@ app_display_drm_activate(struct app_display *disp)
 	drmModeFreeResources(res);
 
 	if (crtc < 0) {
-		fprintf(stderr, "drm: crtc not found\n");
+		log_fatal("drm: crtc not found");
 		return -ENODEV;
 	}
 
@@ -229,7 +239,7 @@ app_display_drm_swap(struct app_display *disp, uint32_t fb)
 			      DRM_MODE_PAGE_FLIP_EVENT, disp);
 
 	if (ret) {
-		fprintf(stderr, "Cannot page flip on DRM CRTC %m\n");
+		log_fatal("Cannot page flip on DRM CRTC %m");
 		return -EFAULT;
 	}
 
@@ -280,7 +290,7 @@ app_video_drm_init(struct app_video *app, app_drm_page_flip_t pageflip_func,
 
 	vdrm->fd = open(node, O_RDWR | O_CLOEXEC | O_NONBLOCK);
 	if (vdrm->fd < 0) {
-		fprintf(stderr, "Cannot open drm device %s : %m", node);
+		log_fatal("Cannot open drm device %s : %m", node);
 		ret = -EFAULT;
 		goto err_drm_open;
 	}
@@ -295,6 +305,7 @@ app_video_drm_init(struct app_video *app, app_drm_page_flip_t pageflip_func,
 				app);
 
 	if (!source) {
+		log_fatal("failed to add drm fd to event loop");
 		ret = -EFAULT;
 		goto err_ev_source;
 	}

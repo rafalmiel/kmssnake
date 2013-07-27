@@ -64,7 +64,7 @@ sn_app_create(void)
 	app->video = app_video_create(app->event_loop, "/dev/dri/card0");
 
 	if (!app->video) {
-		fprintf(stderr, "app: failed to init video\n");
+		log_fatal("failed to init the video");
 		goto err_video;
 	}
 
@@ -74,7 +74,7 @@ sn_app_create(void)
 						 sn_app_signal_handler,
 						 app);
 	if (!sigsrc) {
-		fprintf(stderr, "app: failed to add signal src\n");
+		log_fatal("failed to add source to event loop");
 		goto err_evloop;
 	}
 

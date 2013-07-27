@@ -1,11 +1,14 @@
 #include <stdlib.h>
 #include <utils/cm_utils.h>
+#include <utils/cm_log.h>
 #include <GL/gl.h>
 #include <GL/glext.h>
 #include "string.h"
 #include "app_video.h"
 #include "app_video_internal.h"
 #include "app_video_gldrm.h"
+
+#define LOG_SUBSYSTEM "video"
 
 static int frame = 0;
 
@@ -128,7 +131,7 @@ app_display_create(const struct app_display_ops *ops)
 	ret = display->ops->init(display);
 
 	if (ret) {
-		fprintf(stderr, "Display init failed\n");
+		log_fatal("failed to create display");
 		free(display);
 		return NULL;
 	}
@@ -163,7 +166,7 @@ app_video_create(struct ev_event_loop *evloop, const char *node)
 
 	app_video = malloc(sizeof *app_video);
 	if (!app_video) {
-		fprintf(stderr, "app_vid: failed to allocate video\n");
+		log_fatal("failed to create video: no mem");
 		return NULL;
 	}
 
@@ -177,7 +180,7 @@ app_video_create(struct ev_event_loop *evloop, const char *node)
 	ret = app_video_gldrm_init(app_video);
 
 	if (ret) {
-		fprintf(stderr, "app_vid: failed to init gldrm\n");
+		log_fatal("failed to init gldrm");
 		ev_event_loop_unref(evloop);
 		free(app_video);
 		return NULL;
@@ -186,6 +189,7 @@ app_video_create(struct ev_event_loop *evloop, const char *node)
 	ret = app_video->ops->init(app_video, node);
 
 	if (ret) {
+		log_fatal("failed to init the video");
 		free(app_video);
 		return NULL;
 	}
@@ -193,6 +197,7 @@ app_video_create(struct ev_event_loop *evloop, const char *node)
 	ret = app_video->ops->wake_up(app_video);
 
 	if (ret) {
+		log_fatal("failed to wake up video");
 		app_video->ops->destroy(app_video);
 		return NULL;
 	}
@@ -200,7 +205,7 @@ app_video_create(struct ev_event_loop *evloop, const char *node)
 	ret = app_video->display->ops->activate(app_video->display);
 
 	if (ret) {
-		fprintf(stderr, "app: display activate failed\n");
+		log_fatal("failed to activate display");
 		return NULL;
 	}
 

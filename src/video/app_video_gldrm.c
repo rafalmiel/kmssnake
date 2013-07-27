@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <utils/cm_utils.h>
+#include <utils/cm_log.h>
 #include "app_video_gldrm_internal.h"
 
 #include <EGL/egl.h>
@@ -20,6 +21,8 @@
 #include "app_video.h"
 #include "app_video_drm_internal.h"
 #include "app_video_internal.h"
+
+#define LOG_SUBSYSTEM "gldrm"
 
 static int
 gldrm_display_init(struct app_display *display)
@@ -127,7 +130,7 @@ gldrm_display_activate(struct app_display *display)
 					 GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING);
 
 	if (!dgldrm->gbm) {
-		fprintf(stderr, "gldrm: gbm_surface_create failed\n");
+		log_fatal("gldrm: gbm_surface_create failed");
 		goto err_gbm_create;
 	}
 
@@ -137,14 +140,14 @@ gldrm_display_activate(struct app_display *display)
 						 NULL);
 
 	if (dgldrm->surface == EGL_NO_SURFACE) {
-		fprintf(stderr, "gldrm: eglCreateWindowSurface failed\n");
+		log_fatal("gldrm: eglCreateWindowSurface failed");
 		ret = -EFAULT;
 		goto err_egl_create_surface;
 	}
 
 	if (!eglMakeCurrent(vgldrm->egl_display, dgldrm->surface,
 			    dgldrm->surface, vgldrm->egl_context)) {
-		fprintf(stderr, "gldrm: eglMakeCurrent failed\n");
+		log_fatal("gldrm: eglMakeCurrent failed");
 		ret = -EFAULT;
 		goto err_egl_make_current;
 	}
@@ -162,14 +165,14 @@ gldrm_display_activate(struct app_display *display)
 	glClear(GL_COLOR_BUFFER_BIT);
 
 	if (!eglSwapBuffers(vgldrm->egl_display, dgldrm->surface)) {
-		fprintf(stderr, "gldrm: eglSwapBuffers failed\n");
+		log_fatal("gldrm: eglSwapBuffers failed");
 		ret = -EFAULT;
 		goto err_egl_swap_buffers;
 	}
 
 	bo = gbm_surface_lock_front_buffer(dgldrm->gbm);
 	if (!bo) {
-		fprintf(stderr, "gldrm: gbm_surface_lock_front_buffer failed\n");
+		log_fatal("gldrm: gbm_surface_lock_front_buffer failed");
 		ret = -EFAULT;
 		goto err_egl_swap_buffers;
 	}
@@ -177,7 +180,7 @@ gldrm_display_activate(struct app_display *display)
 	dgldrm->current = bo_to_rb(display, bo);
 
 	if (!dgldrm->current) {
-		fprintf(stderr, "gldrm: bo_to_rb failed\n");
+		log_fatal("gldrm: bo_to_rb failed");
 		ret = -EFAULT;
 		goto err_bo;
 	}
@@ -186,7 +189,7 @@ gldrm_display_activate(struct app_display *display)
 			     0, 0, &ddrm->conn_id, 1, minfo);
 
 	if (ret) {
-		fprintf(stderr, "gldrm: drmModeSetCrtc failed\n");
+		log_fatal("gldrm: drmModeSetCrtc failed");
 		ret = -EFAULT;
 		goto err_bo;
 	}
@@ -218,25 +221,25 @@ gldrm_display_swap(struct app_display *display)
 	int i = 0;
 
 	if (!gbm_surface_has_free_buffers(dgldrm->gbm)) {
-		fprintf(stderr, "Cannot swap EGL buffers BUSY %m\n");
+		log_fatal("Cannot swap EGL buffers BUSY %m");
 		return -EBUSY;
 	}
 
 	if (!eglSwapBuffers(vgldrm->egl_display, dgldrm->surface)) {
-		fprintf(stderr, "Cannot swap EGL buffers %m\n");
+		log_fatal("Cannot swap EGL buffers %m");
 		return -EFAULT;
 	}
 
 	bo = gbm_surface_lock_front_buffer(dgldrm->gbm);
 	if (!bo) {
-		fprintf(stderr, "Cannot lock front buffer\n");
+		log_fatal("Cannot lock front buffer");
 		return -EFAULT;
 	}
 
 	rb = bo_to_rb(display, bo);
 
 	if (!rb) {
-		fprintf(stderr, "cannot lock front gbm buffer\n");
+		log_fatal("cannot lock front gbm buffer");
 		return -EFAULT;
 	}
 
@@ -322,6 +325,7 @@ gldrm_video_init(struct app_video *app_video, const char *node)
 
 	ret = app_video_drm_init(app_video, page_flip_handler, node, gldrm);
 	if (ret) {
+		log_fatal("failed to init drm");
 		goto err_free;
 	}
 
@@ -329,41 +333,47 @@ gldrm_video_init(struct app_video *app_video, const char *node)
 
 	gldrm->gbm_device = gbm_create_device(vdrm->fd);
 	if (!gldrm->gbm_device) {
+		log_fatal("failed to create gbm device");
 		ret = -EFAULT;
 		goto err_video;
 	}
 
 	gldrm->egl_display = eglGetDisplay((EGLNativeDisplayType) gldrm->gbm_device);
 	if (gldrm->egl_display == EGL_NO_DISPLAY) {
+		log_fatal("failed to get egl display");
 		ret = -EFAULT;
 		goto err_gbm;
 	}
 
 	b = eglInitialize(gldrm->egl_display, &major, &minor);
 	if (!b) {
+		log_fatal("failed to initialise egl");
 		ret = -EFAULT;
 		goto err_gbm;
 	}
 
-	printf("EGL Init %d.%d\n", major, minor);
-	printf("EGL Version %s\n", eglQueryString(gldrm->egl_display, EGL_VERSION));
-	printf("EGL Vendor %s\n", eglQueryString(gldrm->egl_display, EGL_VENDOR));
+	log_info("EGL Init %d.%d", major, minor);
+	log_info("EGL Version %s", eglQueryString(gldrm->egl_display, EGL_VERSION));
+	log_info("EGL Vendor %s", eglQueryString(gldrm->egl_display, EGL_VENDOR));
 	ext = eglQueryString(gldrm->egl_display, EGL_EXTENSIONS);
-	printf("EGL Extenstions %s\n", ext);
+	log_info("EGL Extenstions %s", ext);
 
 	if (!ext || !strstr(ext, "EGL_KHR_surfaceless_context")) {
+		log_fatal("EGL_KHR_surfaceless_context extension not supported");
 		ret = -EFAULT;
 		goto err_disp;
 	}
 
 	api = EGL_OPENGL_API;
 	if (!eglBindAPI(api)) {
+		log_fatal("failed to bind egl API");
 		ret = -EFAULT;
 		goto err_disp;
 	}
 
 	b = eglChooseConfig(gldrm->egl_display, conf_att, &gldrm->egl_config, 1, &n);
 	if (!b || n != 1) {
+		log_fatal("failed to choose egl config");
 		ret = -EFAULT;
 		goto err_disp;
 	}
@@ -371,12 +381,14 @@ gldrm_video_init(struct app_video *app_video, const char *node)
 	gldrm->egl_context = eglCreateContext(gldrm->egl_display, gldrm->egl_config, EGL_NO_CONTEXT,
 					      ctx_att);
 	if (gldrm->egl_context == EGL_NO_CONTEXT) {
+		log_fatal("failed to create egl context");
 		ret = -EFAULT;
 		goto err_disp;
 	}
 
 	if (!eglMakeCurrent(gldrm->egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE,
 			    gldrm->egl_context)) {
+		log_fatal("failed to egl make current");
 		ret = -EFAULT;
 		goto err_ctx;
 	}
@@ -428,7 +440,7 @@ gldrm_video_wake_up(struct app_video *app_video)
 		ret = app_video_drm_wake_up(app_video, &gldrm_display_ops);
 
 		if (ret) {
-			fprintf(stderr, "Failed to wake up video\n");
+			log_fatal("failed to wake up drm video");
 			return ret;
 		}
 	}

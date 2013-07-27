@@ -2,18 +2,14 @@
 #include <stdlib.h>
 
 #include "utils/ev_loop.h"
+#include "utils/cm_log.h"
+#include "sn_app.h"
 
 #define LOG_SUBSYSTEM "main"
-
-#include "utils/cm_log.h"
-
-#include "sn_app.h"
 
 int main(int argc, char *argv[])
 {
 	log_configure(argc, argv);
-
-	log_debug("test %d haha", 33);
 
 	struct sn_app *app = sn_app_create();
 
@@ -24,7 +20,7 @@ int main(int argc, char *argv[])
 
 	sn_app_run(app);
 
-	printf("That's all folks!\n");
+	log_info("finishing the app");
 
 	sn_app_unref(app);
 	return 0;
