@@ -86,10 +86,6 @@ draw(uint32_t i, int sp)
 	}
 
 	glRecti(1920/2 - sideWidth, posY - moneta_height, 1920/2 + sideWidth, posY + moneta_height);
-//brzeg koniec
-
-
-
 
 	if (sideA) glColor3f(1.0, 0, 0);
 	else glColor3f(0, 0, 1.00);;

@@ -64,7 +64,7 @@ cm_double_equal(const void *d1, const void *d2)
 CM_EXPORT int
 cm_str_equal(const void *d1, const void *d2)
 {
-	return g_string_equal(d1, d2);
+	return g_str_equal(d1, d2);
 }
 
 CM_EXPORT void

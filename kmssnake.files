@@ -14,3 +14,7 @@ src/video/app_video_gldrm.c
 src/video/app_video_drm.c
 src/video/app_video_drm_internal.h
 src/video/app_video_gldrm_internal.h
+src/utils/cm_hashtable.h
+src/utils/cm_hashtable.c
+src/utils/cm_log.h
+src/utils/cm_log.c

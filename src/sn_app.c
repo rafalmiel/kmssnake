@@ -8,6 +8,11 @@
 
 #include "video/app_video.h"
 
+#define LOG_SUBSYSTEM "app"
+
+#include "utils/cm_log.h"
+
+
 struct sn_app {
 	int ref;
 	struct ev_event_loop *event_loop;
@@ -78,7 +83,7 @@ sn_app_create(void)
 
 	app->signal_source = sigsrc;
 
-	return app;
+	return NULL;
 
 err_evloop:
 	app_video_unref(app->video);
