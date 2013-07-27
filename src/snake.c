@@ -13,6 +13,8 @@ int main(int argc, char *argv[])
 {
 	log_configure(argc, argv);
 
+	log_debug("test %d haha", 33);
+
 	struct sn_app *app = sn_app_create();
 
 	if (!app) {

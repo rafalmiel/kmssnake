@@ -10,6 +10,17 @@
 
 #include "cm_hashtable.h"
 
+const char *LOG_SUBSYSTEM = NULL;
+
+static const char *log_sev2str[] = {
+	[LOG_TRACE] = "DEBUG",
+	[LOG_DEBUG] = "DEBUG",
+	[LOG_INFO] = "INFO",
+	[LOG_WARN] = "WARN",
+	[LOG_ERROR] = "ERROR",
+	[LOG_FATAL] = "FATAL"
+};
+
 struct log_config {
 	int level;
 	struct cm_hashtable *subsystem_level;
@@ -103,7 +114,7 @@ log_write(int level, const char *subsystem,
 	}
 
 	if (lev >= level) {
-		fprintf(stderr, "%s: ", subsystem);
+		fprintf(stderr, "[%s] %s: ", log_sev2str[level], subsystem);
 
 		va_start(list, format);
 		vfprintf(stderr, format, list);

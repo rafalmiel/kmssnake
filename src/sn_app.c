@@ -4,14 +4,11 @@
 #include "sn_app.h"
 
 #include "utils/cm_utils.h"
+#include "utils/cm_log.h"
 #include "utils/ev_loop.h"
-
 #include "video/app_video.h"
 
 #define LOG_SUBSYSTEM "app"
-
-#include "utils/cm_log.h"
-
 
 struct sn_app {
 	int ref;
@@ -83,7 +80,7 @@ sn_app_create(void)
 
 	app->signal_source = sigsrc;
 
-	return NULL;
+	return app;
 
 err_evloop:
 	app_video_unref(app->video);
