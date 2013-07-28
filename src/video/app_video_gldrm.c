@@ -30,8 +30,11 @@ gldrm_display_init(struct app_display *display)
 	struct app_display_gldrm *disp;
 	int ret;
 
+	log_debug("initialising gldrm display")
+
 	disp = malloc(sizeof *disp);
 	if (!disp) {
+		log_fatal("failed to initialise gldrm display: no mem")
 		return -EFAULT;
 	}
 
@@ -40,6 +43,8 @@ gldrm_display_init(struct app_display *display)
 	ret = app_display_drm_init(display, disp);
 
 	if (ret) {
+		log_fatal("failed to initialise drm display: %d, %s",
+			  ret, strerror(ret))
 		goto err_init;
 	}
 
@@ -56,8 +61,12 @@ bo_destroy_event(struct gbm_bo *bo, void *data)
 	struct app_display_gldrm_rb *rb = data;
 	struct app_video_drm *vdrm;
 
-	if (!rb)
+	log_debug("bo destroy event")
+
+	if (!rb) {
+		log_trace("rb already destroyed, quitting")
 		return;
+	}
 
 	vdrm = rb->disp->video->data;
 	drmModeRmFB(vdrm->fd, rb->fb);
@@ -76,8 +85,11 @@ bo_to_rb(struct app_display *display, struct gbm_bo *bo)
 	if (rb)
 		return rb;
 
+	log_debug("allocating new bo")
+
 	rb = malloc(sizeof *rb);
 	if (!rb) {
+		log_fatal("failed to allocate new rb")
 		return NULL;
 	}
 
@@ -91,10 +103,19 @@ bo_to_rb(struct app_display *display, struct gbm_bo *bo)
 	width = gbm_bo_get_width(rb->bo);
 	height = gbm_bo_get_height(rb->bo);
 
+	log_trace("new bo params: stride: %d, width %d, height %d",
+		  stride, width, height)
+
+	if (!rb) {
+		log_fatal("failed to allocate rb: no mem");
+		return NULL;
+	}
+
 	ret = drmModeAddFB(vdrm->fd, width, height, 24, 32,
 			   stride, handle, &rb->fb);
 
 	if (ret) {
+		log_fatal("failed to add drm fb")
 		free(rb);
 		return NULL;
 	}
@@ -115,6 +136,8 @@ gldrm_display_activate(struct app_display *display)
 	drmModeModeInfoPtr minfo;
 	int ret;
 
+	log_debug("activating display")
+
 	minfo = &ddrm->mode_info;
 
 	dgldrm->current = NULL;
@@ -130,7 +153,7 @@ gldrm_display_activate(struct app_display *display)
 					 GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING);
 
 	if (!dgldrm->gbm) {
-		log_fatal("gldrm: gbm_surface_create failed");
+		log_fatal("gbm_surface_create failed");
 		goto err_gbm_create;
 	}
 
@@ -140,14 +163,14 @@ gldrm_display_activate(struct app_display *display)
 						 NULL);
 
 	if (dgldrm->surface == EGL_NO_SURFACE) {
-		log_fatal("gldrm: eglCreateWindowSurface failed");
+		log_fatal("eglCreateWindowSurface failed");
 		ret = -EFAULT;
 		goto err_egl_create_surface;
 	}
 
 	if (!eglMakeCurrent(vgldrm->egl_display, dgldrm->surface,
 			    dgldrm->surface, vgldrm->egl_context)) {
-		log_fatal("gldrm: eglMakeCurrent failed");
+		log_fatal("eglMakeCurrent failed");
 		ret = -EFAULT;
 		goto err_egl_make_current;
 	}
@@ -165,14 +188,14 @@ gldrm_display_activate(struct app_display *display)
 	glClear(GL_COLOR_BUFFER_BIT);
 
 	if (!eglSwapBuffers(vgldrm->egl_display, dgldrm->surface)) {
-		log_fatal("gldrm: eglSwapBuffers failed");
+		log_fatal("eglSwapBuffers failed");
 		ret = -EFAULT;
 		goto err_egl_swap_buffers;
 	}
 
 	bo = gbm_surface_lock_front_buffer(dgldrm->gbm);
 	if (!bo) {
-		log_fatal("gldrm: gbm_surface_lock_front_buffer failed");
+		log_fatal("gbm_surface_lock_front_buffer failed");
 		ret = -EFAULT;
 		goto err_egl_swap_buffers;
 	}
@@ -180,7 +203,7 @@ gldrm_display_activate(struct app_display *display)
 	dgldrm->current = bo_to_rb(display, bo);
 
 	if (!dgldrm->current) {
-		log_fatal("gldrm: bo_to_rb failed");
+		log_fatal("bo_to_rb failed");
 		ret = -EFAULT;
 		goto err_bo;
 	}
@@ -189,7 +212,7 @@ gldrm_display_activate(struct app_display *display)
 			     0, 0, &ddrm->conn_id, 1, minfo);
 
 	if (ret) {
-		log_fatal("gldrm: drmModeSetCrtc failed");
+		log_fatal("drmModeSetCrtc failed");
 		ret = -EFAULT;
 		goto err_bo;
 	}
@@ -263,6 +286,8 @@ gldrm_display_deactivate(struct app_display *display)
 	struct app_video_drm *vdrm = display->video->data;
 	struct app_video_gldrm *vgldrm = vdrm->data;
 
+	log_debug("deactivating display")
+
 	if (dgldrm->current) {
 		gbm_surface_release_buffer(dgldrm->gbm, dgldrm->current->bo);
 		dgldrm->current = NULL;
@@ -318,9 +343,13 @@ gldrm_video_init(struct app_video *app_video, const char *node)
 	struct app_video_drm *vdrm;
 	struct app_video_gldrm *gldrm;
 
+	log_debug("initialising video")
+
 	gldrm = malloc(sizeof *gldrm);
-	if (!gldrm)
+	if (!gldrm) {
+		log_fatal("failed to initialise video: no memory")
 		return -ENOMEM;
+	}
 	memset(gldrm, 0, sizeof *gldrm);
 
 	ret = app_video_drm_init(app_video, page_flip_handler, node, gldrm);
@@ -413,6 +442,8 @@ gldrm_video_destroy(struct app_video *app_video)
 	struct app_video_drm *vdrm;
 	struct app_video_gldrm *gldrm;
 
+	log_debug("destroying video")
+
 	vdrm = app_video->data;
 	gldrm = vdrm->data;
 
@@ -436,6 +467,9 @@ static int
 gldrm_video_wake_up(struct app_video *app_video)
 {
 	int ret;
+
+	log_debug("waking up video")
+
 	if (!app_video->display) {
 		ret = app_video_drm_wake_up(app_video, &gldrm_display_ops);
 
@@ -457,6 +491,8 @@ const static struct app_video_ops gldrm_video_ops = {
 CM_EXPORT int
 app_video_gldrm_init(struct app_video *app_video)
 {
+	log_debug("initialising video ops")
+
 	app_video->ops = &gldrm_video_ops;
 	return 0;
 }

@@ -14,7 +14,7 @@
 const char *LOG_SUBSYSTEM = NULL;
 
 static const char *log_sev2str[] = {
-	[LOG_TRACE] = "DEBUG",
+	[LOG_TRACE] = "TRACE",
 	[LOG_DEBUG] = "DEBUG",
 	[LOG_INFO] = "INFO",
 	[LOG_WARN] = "WARN",

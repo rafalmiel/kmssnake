@@ -18,6 +18,7 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
+	log_info("running the app")
 	sn_app_run(app);
 
 	log_info("finishing the app");

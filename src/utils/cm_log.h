@@ -2,7 +2,7 @@
 #define CM_LOG_H
 
 #ifndef LOG_LEVEL_ENABLED
-#define LOG_LEVEL_ENABLED 5
+#define LOG_LEVEL_ENABLED 6
 #endif
 
 #include <stdarg.h>

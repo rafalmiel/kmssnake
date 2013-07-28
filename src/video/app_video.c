@@ -116,6 +116,8 @@ app_display_create(const struct app_display_ops *ops)
 	struct app_display *display;
 	int ret;
 
+	log_debug("creating app_display")
+
 	display = malloc(sizeof *display);
 	if (!display) {
 		return NULL;
@@ -163,6 +165,8 @@ app_video_create(struct ev_event_loop *evloop, const char *node)
 {
 	struct app_video *app_video;
 	int ret;
+
+	log_debug("creating app_video")
 
 	app_video = malloc(sizeof *app_video);
 	if (!app_video) {

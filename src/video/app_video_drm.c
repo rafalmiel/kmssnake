@@ -20,6 +20,8 @@ app_video_drm_wake_up(struct app_video *video, const struct app_display_ops *ops
 	struct app_video_drm *drmvideo = video->data;
 	int ret;
 
+	log_debug("waking up video")
+
 	ret = drmSetMaster(drmvideo->fd);
 	if (ret) {
 		log_fatal("failed to set drm master");
@@ -47,10 +49,13 @@ app_video_drm_bind_display(struct app_video *video, drmModeResPtr res,
 	struct app_display_drm *drmdisp;
 	int i;
 
+	log_debug("binding display to video")
+
 	disp = app_display_create(ops);
 	disp->video = video;
 
 	if (!disp) {
+		log_fatal("failed to bind display to video")
 		return -EFAULT;
 	}
 	drmdisp = disp->data;
@@ -74,6 +79,8 @@ app_video_drm_hotplug(struct app_video *video, const struct app_display_ops *ops
 	drmModeResPtr res;
 	drmModeConnectorPtr conn;
 	int i, ret;
+
+	log_debug("hotplugging video")
 
 	res = drmModeGetResources(vdrm->fd);
 	if (!res) {
@@ -157,8 +164,11 @@ app_display_drm_init(struct app_display *disp, void *data)
 {
 	struct app_display_drm *drmdisp;
 
+	log_debug("initialising display")
+
 	drmdisp = malloc(sizeof *drmdisp);
 	if (!drmdisp) {
+		log_fatal("failed to initialise display")
 		return -EFAULT;
 	}
 
@@ -183,6 +193,8 @@ app_display_drm_activate(struct app_display *disp)
 	drmModeEncoderPtr enc;
 	int i, j, crtc;
 
+	log_debug("activating display")
+
 	res = drmModeGetResources(vdrm->fd);
 	if (!res) {
 		log_fatal("drm: failed to get resources");
@@ -202,6 +214,8 @@ app_display_drm_activate(struct app_display *disp)
 		if (!enc) {
 			continue;
 		}
+
+		log_trace("using crtc_id: %d", enc->crtc_id)
 
 		crtc = enc->crtc_id;
 
@@ -257,7 +271,10 @@ app_display_drm_deactivate(struct app_display *disp)
 	struct app_video_drm *vdrm = video->data;
 	struct app_display_drm *ddrm = disp->data;
 
+	log_debug("deactivating display")
+
 	if (ddrm->saved_crtc) {
+		log_trace("restoring saved crtc")
 		drmModeSetCrtc(vdrm->fd, ddrm->saved_crtc->crtc_id,
 			       ddrm->saved_crtc->buffer_id,
 			       ddrm->saved_crtc->x,
@@ -280,9 +297,13 @@ app_video_drm_init(struct app_video *app, app_drm_page_flip_t pageflip_func,
 	struct app_video_drm *vdrm;
 	int ret;
 
+	log_debug("initialising video")
+
 	vdrm = malloc(sizeof *vdrm);
-	if (!vdrm)
+	if (!vdrm) {
+		log_fatal("failed to allocate video: no mem")
 		return -ENOMEM;
+	}
 
 	memset(vdrm, 0, sizeof *vdrm);
 
@@ -327,6 +348,8 @@ void
 app_video_drm_destroy(struct app_video *app)
 {
 	struct app_video_drm *vdrm = app->data;
+
+	log_debug("destroying video")
 
 	ev_event_source_remove(vdrm->ev_source);
 	close(vdrm->fd);
