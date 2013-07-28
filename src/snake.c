@@ -9,7 +9,7 @@
 
 int main(int argc, char *argv[])
 {
-	log_configure(argc, argv);
+    cm_log_configure(argc, argv);
 
 	struct sn_app *app = sn_app_create();
 

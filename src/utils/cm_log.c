@@ -77,7 +77,7 @@ print_help_and_exit(void)
 }
 
 CM_EXPORT int
-log_configure(int argc, char *argv[])
+cm_log_configure(int argc, char *argv[])
 {
 	struct log_config *conf;
 	int option_index = 0, optret;
@@ -128,7 +128,7 @@ log_configure(int argc, char *argv[])
 }
 
 CM_EXPORT void
-log_write(int level, const char *subsystem,
+cm_log_write(int level, const char *subsystem,
 	  const char *format, ...)
 {
 	int *lvl;
