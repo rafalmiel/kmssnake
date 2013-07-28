@@ -7,4 +7,4 @@ include_directories(/usr/lib/glib-2.0/include)
 file(GLOB_RECURSE SRC_LIST ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c)
 add_executable(${PROJECT_NAME} ${SRC_LIST})
 
-target_link_libraries(${PROJECT_NAME} drm EGL gbm GL m glib-2.0)
+target_link_libraries(${PROJECT_NAME} drm EGL gbm GL m glib-2.0 udev)
