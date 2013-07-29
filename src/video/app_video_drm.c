@@ -117,9 +117,6 @@ static void
 display_event(int fd, unsigned int frame, unsigned int sec,
 	      unsigned int usec, void *data)
 {
-	struct app_display *disp = data;
-
-	app_display_unref(disp);
 }
 
 static int
@@ -129,9 +126,11 @@ app_video_drm_read_events(struct app_video *video)
 	drmEventContext ev;
 	int ret;
 
+	log_trace("drm_read_events")
+
 	memset(&ev, 0, sizeof ev);
 	ev.version = DRM_EVENT_CONTEXT_VERSION;
-	ev.page_flip_handler;
+	ev.page_flip_handler = display_event;
 	errno = 0;
 	ret = drmHandleEvent(vdrm->fd, &ev);
 
@@ -147,6 +146,8 @@ drm_io_event(int fd, uint32_t mask, void *data)
 	int ret;
 	struct app_video *video = data;
 	struct app_video_drm *vdrm = video->data;
+
+	log_trace("drm_io_event")
 
 	ret = app_video_drm_read_events(video);
 
@@ -251,15 +252,15 @@ app_display_drm_swap(struct app_display *disp, uint32_t fb)
 	int ret;
 	drmModeModeInfoPtr mode;
 
+	log_trace("app_display_drm_swap")
+
 	ret = drmModePageFlip(vdrm->fd, ddrm->crtc_id, fb,
-			      DRM_MODE_PAGE_FLIP_EVENT, disp);
+			      DRM_MODE_PAGE_FLIP_EVENT, NULL);
 
 	if (ret) {
 		log_fatal("Cannot page flip on DRM CRTC %m");
 		return -EFAULT;
 	}
-
-	app_display_ref(disp);
 
 	return 0;
 }

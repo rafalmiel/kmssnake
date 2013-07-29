@@ -28,6 +28,7 @@ sn_app_signal_handler(int signal, void *data)
 	struct sn_app *app = data;
 
 	if (signal == SIGINT) {
+		log_info("SIGINT signal caught")
 		ev_event_loop_stop(app->event_loop);
 		ev_event_source_remove(app->signal_source);
 	}

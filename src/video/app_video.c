@@ -147,15 +147,19 @@ app_display_ref(struct app_display *app_display)
 	if (!app_display || !app_display->ref)
 		return;
 
+	log_trace("app_display_ref %d", app_display->ref)
+
 	++app_display->ref;
 }
 
 CM_EXPORT void
 app_display_unref(struct app_display *app_display)
 {
+	log_trace("app_display_unref %d", app_display->ref)
 	if (!app_display || !app_display->ref || --app_display->ref)
 		return;
 
+	log_trace("app_display_unref deactivate")
 	app_display->ops->deactivate(app_display);
 	free(app_display);
 }
@@ -232,11 +236,16 @@ app_video_ref(struct app_video* app)
 CM_EXPORT void
 app_video_unref(struct app_video* app)
 {
+	log_trace("app_video_unref %d", app->ref)
 	if (!app || !app->ref || --app->ref)
 		return;
 
-	if (app->display)
+	if (app->display) {
+		log_trace("app_video display unref")
 		app_display_unref(app->display);
+
+	}
+
 	app->ops->destroy(app);
 	ev_event_loop_unref(app->evloop);
 	free(app);
