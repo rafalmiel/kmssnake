@@ -22,11 +22,11 @@ app_video_drm_wake_up(struct app_video *video, const struct app_display_ops *ops
 
 	log_debug("waking up video")
 
-	ret = drmSetMaster(drmvideo->fd);
-	if (ret) {
-		log_fatal("failed to set drm master");
-		return -EACCES;
-	}
+//	ret = drmSetMaster(drmvideo->fd);
+//	if (ret) {
+//		log_fatal("failed to set drm master");
+//		return -EACCES;
+//	}
 
 	ret = app_video_drm_hotplug(video, ops);
 

@@ -107,11 +107,9 @@ static void
 display_frame(struct app_display *disp)
 {
 	if (disp->disp_id == 0) {
-		log_trace("draw 1")
 		draw(disp->frame_cnt++, 4, 0);
 		disp->ops->swap(disp);
 	} else {
-		log_trace("draw 2")
 		draw(disp->frame_cnt++, 3, 1);
 		disp->ops->swap(disp);
 	}
@@ -259,13 +257,13 @@ CM_EXPORT void
 app_video_unref(struct app_video* app)
 {
 	struct app_display *app_display;
-	struct cm_list *iter;
+	struct cm_list *iter, *tmp;
 
 	log_trace("app_video_unref %d", app->ref)
 	if (!app || !app->ref || --app->ref)
 		return;
 
-	cm_list_foreach(iter, &app->displays) {
+	cm_list_foreach_safe(iter, tmp, &app->displays) {
 		app_display = cm_list_entry(iter, struct app_display, link);
 		app_display_unref(app_display);
 	}

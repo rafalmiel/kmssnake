@@ -95,6 +95,7 @@ sn_app_unref(struct sn_app* app)
 		return;
 
 	app_video_unref(app->video);
+	udev_unref(app->udev);
 	ev_event_loop_unref(app->event_loop);
 	free(app);
 }
@@ -128,6 +129,7 @@ sn_app_create(void)
 	}
 
 	node = udev_device_get_devnode(drm_dev);
+	udev_device_unref(drm_dev);
 
 	log_info("found primary gpu: %s", node)
 
