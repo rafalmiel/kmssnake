@@ -22,11 +22,11 @@ app_video_drm_wake_up(struct app_video *video, const struct app_display_ops *ops
 
 	log_debug("waking up video")
 
-	ret = drmSetMaster(drmvideo->fd);
-	if (ret) {
-		log_fatal("failed to set drm master");
-		return -EACCES;
-	}
+	//ret = drmSetMaster(drmvideo->fd);
+	//if (ret) {
+	//	log_fatal("failed to set drm master");
+	//	return -EACCES;
+	//}
 
 	ret = app_video_drm_hotplug(video, ops);
 
@@ -59,7 +59,7 @@ app_video_drm_bind_display(struct app_video *video, drmModeResPtr res,
 		return -EFAULT;
 	}
 	drmdisp = disp->data;
-	video->display = disp;
+	cm_list_insert(&video->displays, &disp->link);
 
 	for (i = 0; i < conn->count_modes; ++i) {
 		drmdisp->mode_info = conn->modes[i];
@@ -88,7 +88,7 @@ app_video_drm_hotplug(struct app_video *video, const struct app_display_ops *ops
 	}
 
 	ret = -ENODEV;
-	for (i = 0; i < res->count_connectors; ++i) {
+	for (i = res->count_connectors - 1; i >= 0; --i) {
 		conn = drmModeGetConnector(vdrm->fd, res->connectors[i]);
 		if (!conn) continue;
 		if (conn->connection != DRM_MODE_CONNECTED) {
@@ -108,7 +108,6 @@ app_video_drm_hotplug(struct app_video *video, const struct app_display_ops *ops
 		}
 
 		ret = 0;
-		break;
 	}
 
 	drmModeFreeResources(res);
@@ -119,6 +118,9 @@ static void
 display_event(int fd, unsigned int frame, unsigned int sec,
 	      unsigned int usec, void *data)
 {
+	struct app_display_drm *disp = data;
+
+	disp->pflip = 1;
 }
 
 static int
@@ -144,6 +146,9 @@ static int
 drm_io_event(int fd, uint32_t mask, void *data)
 {
 	int ret;
+	struct app_display *display;
+	struct app_display_drm *ddrm;
+	struct cm_list *iter;
 	struct app_video *video = data;
 	struct app_video_drm *vdrm = video->data;
 
@@ -153,9 +158,18 @@ drm_io_event(int fd, uint32_t mask, void *data)
 		return ret;
 	}
 
-	vdrm->page_flip_fun(video->display);
+	cm_list_foreach(iter, &video->displays) {
+		display = cm_list_entry(iter, struct app_display, link);
+		ddrm = display->data;
+		if (ddrm->pflip) {
+			vdrm->page_flip_fun(display);
 
-	video->display->frame_func(video->display);
+			display->frame_func(display);
+
+			ddrm->pflip = 0;
+		}
+
+	}
 }
 
 int
@@ -177,6 +191,7 @@ app_display_drm_init(struct app_display *disp, void *data)
 	drmdisp->saved_crtc = NULL;
 	drmdisp->conn_id = 0;
 	drmdisp->crtc_id = 0;
+	drmdisp->pflip = 0;
 
 	return 0;
 }
@@ -251,7 +266,7 @@ app_display_drm_swap(struct app_display *disp, uint32_t fb)
 	drmModeModeInfoPtr mode;
 
 	ret = drmModePageFlip(vdrm->fd, ddrm->crtc_id, fb,
-			      DRM_MODE_PAGE_FLIP_EVENT, NULL);
+			      DRM_MODE_PAGE_FLIP_EVENT, ddrm);
 
 	if (ret) {
 		log_fatal("Cannot page flip on DRM CRTC %m");

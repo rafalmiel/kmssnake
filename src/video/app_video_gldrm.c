@@ -1,5 +1,6 @@
 #include "app_video_gldrm.h"
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <utils/cm_utils.h>
@@ -235,6 +236,7 @@ err_gbm_create:
 static int
 gldrm_display_swap(struct app_display *display)
 {
+	struct app_display_drm *ddrm = display->data;
 	struct app_display_gldrm *dgldrm = app_display_drm_get_data(display);
 	struct app_video *video = display->video;
 	struct app_video_gldrm *vgldrm = app_video_drm_get_data(video);
@@ -248,8 +250,15 @@ gldrm_display_swap(struct app_display *display)
 		return -EBUSY;
 	}
 
+	if (!eglMakeCurrent(vgldrm->egl_display, dgldrm->surface,
+			    dgldrm->surface, vgldrm->egl_context)) {
+		log_error("cannot activate EGL context");
+		return -EFAULT;
+	}
+
 	if (!eglSwapBuffers(vgldrm->egl_display, dgldrm->surface)) {
-		log_fatal("Cannot swap EGL buffers %m");
+		log_fatal("Cannot swap EGL buffers %d %m", ddrm->crtc_id);
+		//assert(!"aaa");
 		return -EFAULT;
 	}
 
@@ -470,13 +479,11 @@ gldrm_video_wake_up(struct app_video *app_video)
 
 	log_debug("waking up video")
 
-	if (!app_video->display) {
-		ret = app_video_drm_wake_up(app_video, &gldrm_display_ops);
+	ret = app_video_drm_wake_up(app_video, &gldrm_display_ops);
 
-		if (ret) {
-			log_fatal("failed to wake up drm video");
-			return ret;
-		}
+	if (ret) {
+		log_fatal("failed to wake up drm video");
+		return ret;
 	}
 
 	return 0;

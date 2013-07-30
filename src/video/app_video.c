@@ -168,6 +168,8 @@ CM_EXPORT struct app_video *
 app_video_create(struct ev_event_loop *evloop, const char *node)
 {
 	struct app_video *app_video;
+	struct app_display *app_display;
+	struct cm_list *iter;
 	int ret;
 
 	log_debug("creating app_video")
@@ -180,7 +182,7 @@ app_video_create(struct ev_event_loop *evloop, const char *node)
 
 	app_video->ref = 1;
 	app_video->evloop = evloop;
-	app_video->display = NULL;
+	cm_list_init(&app_video->displays);
 
 	ev_event_loop_ref(evloop);
 
@@ -210,16 +212,24 @@ app_video_create(struct ev_event_loop *evloop, const char *node)
 		return NULL;
 	}
 
-	ret = app_video->display->ops->activate(app_video->display);
+	cm_list_foreach(iter, &app_video->displays) {
+		app_display = cm_list_entry(iter, struct app_display, link);
+		ret = app_display->ops->activate(app_display);
 
-	if (ret) {
-		log_fatal("failed to activate display");
-		return NULL;
+		if (ret) {
+			log_fatal("failed to activate display");
+			return NULL;
+		}
 	}
 
-	glClearColor(0.8, 0.8, 0.8, 1);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	app_video->display->ops->swap(app_video->display);
+	double cl = 0.2;
+
+	cm_list_foreach(iter, &app_video->displays) {
+		app_display = cm_list_entry(iter, struct app_display, link);
+		glClearColor(cl, cl, cl, 1);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		app_display->ops->swap(app_display);
+	}
 
 	return app_video;
 }
@@ -236,14 +246,16 @@ app_video_ref(struct app_video* app)
 CM_EXPORT void
 app_video_unref(struct app_video* app)
 {
+	struct app_display *app_display;
+	struct cm_list *iter;
+
 	log_trace("app_video_unref %d", app->ref)
 	if (!app || !app->ref || --app->ref)
 		return;
 
-	if (app->display) {
-		log_trace("app_video display unref")
-		app_display_unref(app->display);
-
+	cm_list_foreach(iter, &app->displays) {
+		app_display = cm_list_entry(iter, struct app_display, link);
+		app_display_unref(app_display);
 	}
 
 	app->ops->destroy(app);

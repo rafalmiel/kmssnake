@@ -10,6 +10,7 @@ struct app_video;
 typedef void (*frame_func_t)(struct app_display *);
 
 struct app_display {
+	struct cm_list link;
 	unsigned int ref;
 	struct app_video *video;
 	const struct app_display_ops *ops;
@@ -22,8 +23,7 @@ struct app_video {
 	unsigned int ref;
 	struct ev_event_loop *evloop;
 	const struct app_video_ops *ops;
-	//lets just support one display for now
-	struct app_display *display;
+	struct cm_list displays;
 
 	void *data;
 };

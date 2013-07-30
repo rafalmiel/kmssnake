@@ -18,6 +18,7 @@ struct app_display_drm {
 	drmModeCrtc *saved_crtc;
 	drmModeModeInfo mode_info;
 	void *data;
+	int pflip;
 };
 
 struct app_video_drm {
