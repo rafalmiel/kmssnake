@@ -129,7 +129,6 @@ sn_app_create(void)
 	}
 
 	node = udev_device_get_devnode(drm_dev);
-	udev_device_unref(drm_dev);
 
 	log_info("found primary gpu: %s", node)
 
@@ -151,6 +150,8 @@ sn_app_create(void)
 	}
 
 	app->signal_source = sigsrc;
+
+	udev_device_unref(drm_dev);
 
 	return app;
 
