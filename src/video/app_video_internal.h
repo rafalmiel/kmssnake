@@ -15,6 +15,8 @@ struct app_display {
 	struct app_video *video;
 	const struct app_display_ops *ops;
 	frame_func_t frame_func;
+	int frame_cnt;
+	int disp_id;
 
 	void *data;
 };

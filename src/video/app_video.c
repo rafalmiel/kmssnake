@@ -32,13 +32,13 @@ drawCircle(int px, int py, int width, int height) {
 	glEnd();
 }
 
-static int t = 0;
+static int t[] = {0, 0};
 
-static int sideA = 0;
-static int wasChange = 0;
+static int sideA[] = {0, 0};
+static int wasChange[] = {0, 0};
 
 static void
-draw(uint32_t i, int sp)
+draw(uint32_t i, int sp, int ind)
 {
 	glClearColor(0.8, 0.8, 0.8, 1);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);     // Clear The Screen And The Depth Buffer
@@ -50,15 +50,15 @@ draw(uint32_t i, int sp)
 	int posY = 1080/2;// - 50 - moneta_height;
 
 
-	double speed = fabs(cosf(2.0*PI*t/(2.0*360.0)));
-	t += sp;
-	t = t % 360;
+	double speed = fabs(cosf(2.0*PI*t[ind]/(2.0*360.0)));
+	t[ind] += sp;
+	t[ind] = t[ind] % 360;
 
-	if (!wasChange && t >= 180) {
-		sideA = !sideA;
-		wasChange = 1;
-	} else if (wasChange && t < 180) {
-		wasChange = 0;
+	if (!wasChange[ind] && t[ind] >= 180) {
+		sideA[ind] = !sideA[ind];
+		wasChange[ind] = 1;
+	} else if (wasChange[ind] && t[ind] < 180) {
+		wasChange[ind] = 0;
 	}
 
 	moneta_width = moneta_height * speed;
@@ -72,12 +72,12 @@ draw(uint32_t i, int sp)
 	int sideLeft= 0;
 	int side = 20;
 
-	if (t <= 180) {
-		sideWidth = (int) floor((t / 180.0)*side );
+	if (t[ind] <= 180) {
+		sideWidth = (int) floor((t[ind] / 180.0)*side );
 		sideRight  = 1;
 	}
-	if (t >= 180){
-		sideWidth = (int)floor((side *2.0 - (t / 180.0)*side ));
+	if (t[ind] >= 180){
+		sideWidth = (int)floor((side *2.0 - (t[ind] / 180.0)*side ));
 		sideLeft = 1;
 	}
 
@@ -106,9 +106,19 @@ draw(uint32_t i, int sp)
 static void
 display_frame(struct app_display *disp)
 {
-	draw(frame++, 3);
-	disp->ops->swap(disp);
+	if (disp->disp_id == 0) {
+		log_trace("draw 1")
+		draw(disp->frame_cnt++, 4, 0);
+		disp->ops->swap(disp);
+	} else {
+		log_trace("draw 2")
+		draw(disp->frame_cnt++, 3, 1);
+		disp->ops->swap(disp);
+	}
+
 }
+
+static int disp_num = 0;
 
 struct app_display *
 app_display_create(const struct app_display_ops *ops)
@@ -129,6 +139,8 @@ app_display_create(const struct app_display_ops *ops)
 	display->data = NULL;
 	display->ops = ops;
 	display->frame_func = display_frame;
+	display->frame_cnt = 0;
+	display->disp_id = disp_num++;
 
 	ret = display->ops->init(display);
 
