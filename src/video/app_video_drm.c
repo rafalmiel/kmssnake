@@ -96,6 +96,8 @@ app_video_drm_hotplug(struct app_video *video, const struct app_display_ops *ops
 			continue;
 		}
 
+		log_trace("using connector %d", conn->connector_id)
+
 		ret = app_video_drm_bind_display(video, res, conn, ops);
 
 		drmModeFreeConnector(conn);
@@ -126,8 +128,6 @@ app_video_drm_read_events(struct app_video *video)
 	drmEventContext ev;
 	int ret;
 
-	log_trace("drm_read_events")
-
 	memset(&ev, 0, sizeof ev);
 	ev.version = DRM_EVENT_CONTEXT_VERSION;
 	ev.page_flip_handler = display_event;
@@ -146,8 +146,6 @@ drm_io_event(int fd, uint32_t mask, void *data)
 	int ret;
 	struct app_video *video = data;
 	struct app_video_drm *vdrm = video->data;
-
-	log_trace("drm_io_event")
 
 	ret = app_video_drm_read_events(video);
 
@@ -251,8 +249,6 @@ app_display_drm_swap(struct app_display *disp, uint32_t fb)
 	struct app_video_drm *vdrm = video->data;
 	int ret;
 	drmModeModeInfoPtr mode;
-
-	log_trace("app_display_drm_swap")
 
 	ret = drmModePageFlip(vdrm->fd, ddrm->crtc_id, fb,
 			      DRM_MODE_PAGE_FLIP_EVENT, NULL);
