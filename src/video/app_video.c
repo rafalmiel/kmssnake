@@ -90,7 +90,7 @@ draw(uint32_t i, int sp, int ind)
 
 	glRecti(1920/2 - sideWidth, posY - moneta_height, 1920/2 + sideWidth, posY + moneta_height);
 
-	if (sideA) glColor3f(1.0, 0, 0);
+	if (sideA[ind]) glColor3f(1.0, 0, 0);
 	else glColor3f(0, 0, 1.00);;
 
 	if (sideLeft) {
