@@ -17,6 +17,7 @@ struct sn_app {
 	struct ev_event_loop *event_loop;
 
 	struct ev_event_source *signal_source;
+	struct ev_event_source *timer_source;
 	struct app_video *video;
 
 	struct udev *udev;
@@ -32,6 +33,16 @@ sn_app_signal_handler(int signal, void *data)
 		ev_event_loop_stop(app->event_loop);
 		ev_event_source_remove(app->signal_source);
 	}
+}
+
+static int
+sn_app_timer_poll_handler(void *data)
+{
+	struct sn_app* app = data;
+
+	log_trace("timer poll")
+
+	app_video_poll(app->video);
 }
 
 static struct udev_device *
@@ -150,6 +161,14 @@ sn_app_create(void)
 	}
 
 	app->signal_source = sigsrc;
+
+	struct ev_event_source *timsrc =
+			ev_event_loop_add_timer(app->event_loop,
+						 sn_app_timer_poll_handler,
+						 app);
+	ev_event_source_timer_update(timsrc, 1000, 3000);
+
+	app->timer_source = timsrc;
 
 	udev_device_unref(drm_dev);
 

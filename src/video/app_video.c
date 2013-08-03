@@ -266,6 +266,18 @@ app_video_create(struct ev_event_loop *evloop, const char *node)
 	return app_video;
 }
 
+CM_EXPORT int
+app_video_poll(struct app_video *video)
+{
+	int ret = video->ops->poll(video);
+
+	if (ret) {
+		log_fatal("failed to poll the video")
+	}
+
+	return ret;
+}
+
 CM_EXPORT void
 app_video_ref(struct app_video* app)
 {
