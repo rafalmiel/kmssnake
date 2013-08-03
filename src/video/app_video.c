@@ -139,6 +139,7 @@ app_display_create(const struct app_display_ops *ops)
 	display->frame_func = display_frame;
 	display->frame_cnt = 0;
 	display->disp_id = disp_num++;
+	display->flags = 0;
 
 	ret = display->ops->init(display);
 
@@ -149,6 +150,28 @@ app_display_create(const struct app_display_ops *ops)
 	}
 
 	return display;
+}
+
+int
+app_display_bind(struct app_video *video, struct app_display *display)
+{
+	log_debug("binding display to video")
+
+	cm_list_insert(&video->displays, &display->link);
+
+	return 0;
+}
+
+void
+app_display_unbind(struct app_display *display)
+{
+	log_debug("unbinding display from video")
+
+	display->ops->deactivate(display);
+
+	cm_list_remove(&display->link);
+
+	app_display_unref(display);
 }
 
 CM_EXPORT void
@@ -170,7 +193,6 @@ app_display_unref(struct app_display *app_display)
 		return;
 
 	log_trace("app_display_unref deactivate")
-	app_display->ops->deactivate(app_display);
 	free(app_display);
 }
 
@@ -265,7 +287,7 @@ app_video_unref(struct app_video* app)
 
 	cm_list_foreach_safe(iter, tmp, &app->displays) {
 		app_display = cm_list_entry(iter, struct app_display, link);
-		app_display_unref(app_display);
+		app_display_unbind(app_display);
 	}
 
 	app->ops->destroy(app);

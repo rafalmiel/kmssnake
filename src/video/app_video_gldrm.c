@@ -489,10 +489,26 @@ gldrm_video_wake_up(struct app_video *app_video)
 	return 0;
 }
 
+static int
+gldrm_video_poll(struct app_video *app_video)
+{
+	int ret;
+
+	log_debug("polling video")
+
+	ret = app_video_drm_hotplug(app_video, &gldrm_display_ops);
+	if (ret) {
+		log_fatal("failed t ohotplug video")
+	}
+
+	return ret;
+}
+
 const static struct app_video_ops gldrm_video_ops = {
 	gldrm_video_init,
 	gldrm_video_destroy,
-	gldrm_video_wake_up
+	gldrm_video_wake_up,
+	gldrm_video_poll
 };
 
 CM_EXPORT int

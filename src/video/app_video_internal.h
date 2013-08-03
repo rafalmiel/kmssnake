@@ -9,6 +9,8 @@ struct app_video;
 
 typedef void (*frame_func_t)(struct app_display *);
 
+#define DISPLAY_AVAILABLE 0x1
+
 struct app_display {
 	struct cm_list link;
 	unsigned int ref;
@@ -17,6 +19,7 @@ struct app_display {
 	frame_func_t frame_func;
 	int frame_cnt;
 	int disp_id;
+	unsigned int flags;
 
 	void *data;
 };
@@ -34,6 +37,7 @@ struct app_video_ops {
 	int (*init)(struct app_video *, const char *node);
 	void (*destroy)(struct app_video *);
 	int (*wake_up)(struct app_video *);
+	int (*poll)(struct app_video *);
 };
 
 struct app_display_ops {
@@ -42,5 +46,8 @@ struct app_display_ops {
 	int (*swap)(struct app_display *);
 	void (*deactivate)(struct app_display *);
 };
+
+int app_display_bind(struct app_video *video, struct app_display *display);
+void app_display_unbind(struct app_display *display);
 
 #endif // APP_VIDEO_INTERNAL_H

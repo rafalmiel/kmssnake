@@ -59,7 +59,10 @@ app_video_drm_bind_display(struct app_video *video, drmModeResPtr res,
 		return -EFAULT;
 	}
 	drmdisp = disp->data;
-	cm_list_insert(&video->displays, &disp->link);
+
+	app_display_bind(video, disp);
+
+	disp->flags |= DISPLAY_AVAILABLE;
 
 	for (i = 0; i < conn->count_modes; ++i) {
 		drmdisp->mode_info = conn->modes[i];
@@ -76,6 +79,9 @@ int
 app_video_drm_hotplug(struct app_video *video, const struct app_display_ops *ops)
 {
 	struct app_video_drm *vdrm = video->data;
+	struct app_display *display;
+	struct app_display_drm *ddrm;
+	struct cm_list *iter, *tmp;
 	drmModeResPtr res;
 	drmModeConnectorPtr conn;
 	int i, ret;
@@ -87,6 +93,11 @@ app_video_drm_hotplug(struct app_video *video, const struct app_display_ops *ops
 		return -EACCES;
 	}
 
+	cm_list_foreach(iter, &video->displays) {
+		display = cm_list_entry(iter, struct app_display, link);
+		display->flags &= ~DISPLAY_AVAILABLE;
+	}
+
 	ret = -ENODEV;
 	for (i = res->count_connectors - 1; i >= 0; --i) {
 		conn = drmModeGetConnector(vdrm->fd, res->connectors[i]);
@@ -96,9 +107,25 @@ app_video_drm_hotplug(struct app_video *video, const struct app_display_ops *ops
 			continue;
 		}
 
+		cm_list_foreach(iter, &video->displays) {
+			display = cm_list_entry(iter, struct app_display, link);
+			ddrm = display->data;
+
+			if (ddrm->conn_id != res->connectors[i])
+				continue;
+
+			display->flags != DISPLAY_AVAILABLE;
+
+			break;
+		}
+
 		log_trace("using connector %d", conn->connector_id)
 
-		ret = app_video_drm_bind_display(video, res, conn, ops);
+		if (iter == &video->displays) {
+			log_trace("binding new display")
+
+			ret = app_video_drm_bind_display(video, res, conn, ops);
+		}
 
 		drmModeFreeConnector(conn);
 
@@ -111,6 +138,14 @@ app_video_drm_hotplug(struct app_video *video, const struct app_display_ops *ops
 	}
 
 	drmModeFreeResources(res);
+
+	cm_list_foreach_safe(iter, tmp, &video->displays) {
+		display = cm_list_entry(iter, struct app_display, link);
+		if (!(display->flags & DISPLAY_AVAILABLE)) {
+			app_display_unbind(display);
+		}
+	}
+
 	return ret;
 }
 
