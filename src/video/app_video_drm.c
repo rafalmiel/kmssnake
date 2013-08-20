@@ -95,7 +95,7 @@ app_video_drm_hotplug(struct app_video *video, const struct app_display_ops *ops
 
 	cm_list_foreach(iter, &video->displays) {
 		display = cm_list_entry(iter, struct app_display, link);
-		display->flags &= ~DISPLAY_AVAILABLE;
+		display->flags &= ~(DISPLAY_AVAILABLE);
 	}
 
 	ret = -ENODEV;
@@ -114,7 +114,7 @@ app_video_drm_hotplug(struct app_video *video, const struct app_display_ops *ops
 			if (ddrm->conn_id != res->connectors[i])
 				continue;
 
-			display->flags != DISPLAY_AVAILABLE;
+			display->flags |= DISPLAY_AVAILABLE;
 
 			break;
 		}
@@ -125,14 +125,14 @@ app_video_drm_hotplug(struct app_video *video, const struct app_display_ops *ops
 			log_trace("binding new display")
 
 			ret = app_video_drm_bind_display(video, res, conn, ops);
+
+			if (ret) {
+				log_fatal("failed to bind drm display");
+				return ret;
+			}
 		}
 
 		drmModeFreeConnector(conn);
-
-		if (ret) {
-			log_fatal("failed to bind drm display");
-			return ret;
-		}
 
 		ret = 0;
 	}
@@ -288,6 +288,8 @@ app_display_drm_activate(struct app_display *disp)
 
 	ddrm->saved_crtc = drmModeGetCrtc(vdrm->fd, ddrm->crtc_id);
 
+	disp->flags |= DISPLAY_ACTIVATED;
+
 	return 0;
 }
 
@@ -335,6 +337,8 @@ app_display_drm_deactivate(struct app_display *disp)
 
 	ddrm->crtc_id = 0;
 	free(ddrm);
+
+	disp->flags &= ~DISPLAY_ACTIVATED;
 }
 
 int

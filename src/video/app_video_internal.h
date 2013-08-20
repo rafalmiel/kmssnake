@@ -10,6 +10,7 @@ struct app_video;
 typedef void (*frame_func_t)(struct app_display *);
 
 #define DISPLAY_AVAILABLE 0x1
+#define DISPLAY_ACTIVATED 0x2
 
 struct app_display {
 	struct cm_list link;

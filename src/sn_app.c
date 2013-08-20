@@ -2,6 +2,7 @@
 #include <signal.h>
 #include <libudev.h>
 #include <string.h>
+#include <fcntl.h>
 
 #include "sn_app.h"
 
@@ -21,6 +22,7 @@ struct sn_app {
 	struct app_video *video;
 
 	struct udev *udev;
+	struct udev_monitor *udev_mon;
 };
 
 static int
@@ -111,6 +113,40 @@ sn_app_unref(struct sn_app* app)
 	free(app);
 }
 
+static int
+udev_monitor_fun(int fd, uint32_t mask, void *data)
+{
+	struct sn_app *app = data;
+
+	log_info("=========== drm change event")
+
+	udev_monitor_receive_device(app->udev_mon);
+
+	app_video_poll(app->video);
+}
+
+static void
+init_udev_monitor(struct sn_app *app)
+{
+	int ufd, set;
+
+	app->udev_mon = udev_monitor_new_from_netlink(app->udev, "udev");
+
+	udev_monitor_filter_add_match_subsystem_devtype(app->udev_mon,
+							"drm", "drm_minor");
+
+	udev_monitor_enable_receiving(app->udev_mon);
+
+	ufd = udev_monitor_get_fd(app->udev_mon);
+
+	set = fcntl(ufd, F_GETFL);
+	set |= O_NONBLOCK;
+	fcntl(ufd, F_SETFL, set);
+
+	ev_event_loop_add_fd(app->event_loop, EV_EVENT_READABLE, ufd,
+			     udev_monitor_fun, app);
+}
+
 CM_EXPORT struct sn_app *
 sn_app_create(void)
 {
@@ -126,6 +162,8 @@ sn_app_create(void)
 	app->event_loop = ev_event_loop_create();
 
 	app->udev = udev_new();
+
+	init_udev_monitor(app);
 
 	if (!app->udev) {
 		log_fatal("failed to create udev")
@@ -162,13 +200,13 @@ sn_app_create(void)
 
 	app->signal_source = sigsrc;
 
-	struct ev_event_source *timsrc =
+	/*struct ev_event_source *timsrc =
 			ev_event_loop_add_timer(app->event_loop,
 						 sn_app_timer_poll_handler,
 						 app);
 	ev_event_source_timer_update(timsrc, 1000, 3000);
 
-	app->timer_source = timsrc;
+	app->timer_source = timsrc;*/
 
 	udev_device_unref(drm_dev);
 

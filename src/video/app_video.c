@@ -269,7 +269,25 @@ app_video_create(struct ev_event_loop *evloop, const char *node)
 CM_EXPORT int
 app_video_poll(struct app_video *video)
 {
+	struct app_display *app_display;
+	struct cm_list *iter;
 	int ret = video->ops->poll(video);
+
+	cm_list_foreach(iter, &video->displays) {
+		app_display = cm_list_entry(iter, struct app_display, link);
+		if (app_display->flags & DISPLAY_AVAILABLE && !(app_display->flags & DISPLAY_ACTIVATED)) {
+			ret = app_display->ops->activate(app_display);
+			double cl = 0.2;
+			glClearColor(cl, cl, cl, 1);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+			app_display->ops->swap(app_display);
+		}
+
+		if (ret) {
+			log_fatal("failed to activate display");
+			return ret;
+		}
+	}
 
 	if (ret) {
 		log_fatal("failed to poll the video")

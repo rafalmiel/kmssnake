@@ -498,7 +498,7 @@ gldrm_video_poll(struct app_video *app_video)
 
 	ret = app_video_drm_hotplug(app_video, &gldrm_display_ops);
 	if (ret) {
-		log_fatal("failed t ohotplug video")
+		log_fatal("failed to hotplug video")
 	}
 
 	return ret;
